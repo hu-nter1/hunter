@@ -19,4 +19,4 @@ RUN mkdir -p uploads && chmod 777 uploads
 EXPOSE 8080
 # Railway supplies $PORT; fall back to 8080 for a plain `docker run`.
 # JSON form (exec, not shell) so the process gets SIGTERM directly on stop/redeploy.
-CMD ["sh", "-c", "php -S 0.0.0.0:${PORT:-8080} -t /app"]
+CMD php -d auto_prepend_file=/var/www/html/auth_gate.php -S 0.0.0.0:${PORT:-8000} -t .
