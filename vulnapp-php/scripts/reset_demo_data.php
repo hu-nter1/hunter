@@ -50,8 +50,9 @@ try {
     $pdo->beginTransaction();
     foreach ($tables as $table) {
         $phase = "clearing $table";
-        if ($pdo->exec("DELETE FROM $table") === false) {
-            $errorInfo = $pdo->errorInfo();
+        $deleted = $pdo->exec("DELETE FROM $table");
+        $errorInfo = $pdo->errorInfo();
+        if ($deleted === false || ($errorInfo[0] ?? '00000') !== '00000') {
             throw new RuntimeException('Delete failed: ' . implode(' | ', array_filter($errorInfo)));
         }
         $pdo->query('SELECT 1')->fetchColumn();
