@@ -46,8 +46,10 @@ $tables = [
 
 $phase = 'clearing existing shop records';
 try {
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->beginTransaction();
     foreach ($tables as $table) {
+        $phase = "clearing $table";
         $pdo->exec("DELETE FROM $table");
     }
 
