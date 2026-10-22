@@ -18,6 +18,15 @@ $fullname = trim($_POST['fullname'] ?? '');
 $contact = trim($_POST['contact'] ?? '');
 $district = trim($_POST['district'] ?? '');
 $address = trim($_POST['address'] ?? '');
+$cartTotal = 0;
+foreach ($_SESSION['cart'] as $itemId => $quantity) {
+    $priceQuery = $pdo->prepare('SELECT price FROM products WHERE id = ?');
+    $priceQuery->execute([(int)$itemId]);
+    $price = $priceQuery->fetchColumn();
+    if ($price !== false) {
+        $cartTotal += (float)$price * max(1, (int)$quantity);
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm'])) {
     $full_shipping = "$address, $district, Contact: $contact";
@@ -77,7 +86,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm'])) {
     }
 }
 ?>
-<h3>Checkout</h3>
+<?php
+$page_title = 'Checkout';
+require __DIR__ . '/includes/header.php';
+?>
+<section class="card" style="max-width:760px;margin:32px auto;">
+<h1 style="margin-top:0;">Checkout</h1>
+<p class="muted">Confirm your delivery details and review the total before placing your order.</p>
+<div class="card" style="padding:16px 20px;margin:20px 0;background:#f7f8fc;box-shadow:none;">
+    <strong>Order total</strong>
+    <span style="float:right;font-size:18px;font-weight:800;color:#3947ad;">$<?= number_format($cartTotal, 2) ?></span>
+</div>
 <?php if ($checkoutError !== null): ?>
     <div class="error" role="alert">
         <p><?= htmlspecialchars($checkoutError) ?></p>
@@ -89,13 +108,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm'])) {
     </div>
 <?php endif; ?>
 <form method="POST">
-    <label>Full Name</label>
-    <input type="text" name="fullname" value="<?= htmlspecialchars($fullname) ?>" required>
-    <label>Contact</label>
-    <input type="text" name="contact" value="<?= htmlspecialchars($contact) ?>" required>
-    <label>District</label>
-    <input type="text" name="district" value="<?= htmlspecialchars($district) ?>" required>
-    <label>Address</label>
-    <textarea name="address" required><?= htmlspecialchars($address) ?></textarea>
-    <button type="submit" name="confirm">Confirm Order</button>
+    <label for="checkout-fullname">Full name</label>
+    <input id="checkout-fullname" type="text" name="fullname" value="<?= htmlspecialchars($fullname) ?>" autocomplete="name" required>
+    <label for="checkout-contact">Contact</label>
+    <input id="checkout-contact" type="text" name="contact" value="<?= htmlspecialchars($contact) ?>" autocomplete="tel" required>
+    <label for="checkout-district">District</label>
+    <input id="checkout-district" type="text" name="district" value="<?= htmlspecialchars($district) ?>" required>
+    <label for="checkout-address">Delivery address</label>
+    <textarea id="checkout-address" name="address" autocomplete="street-address" rows="3" required><?= htmlspecialchars($address) ?></textarea>
+    <button type="submit" name="confirm">Confirm order · $<?= number_format($cartTotal, 2) ?></button>
 </form>
+</section>
+<?php require __DIR__ . '/includes/footer.php'; ?>

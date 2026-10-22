@@ -12,9 +12,11 @@ if (VULN_PATH_TRAVERSAL_DOWNLOAD) {
     $path = 'uploads/' . $base;
 }
 
-if (file_exists($path)) {
+if (is_file($path) && is_readable($path)) {
     header('Content-Type: application/octet-stream');
     readfile($path);
 } else {
-    die("File not found.");
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=UTF-8');
+    echo 'Receipt not found.';
 }

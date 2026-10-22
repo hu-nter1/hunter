@@ -49,7 +49,8 @@ $total = 0;
 <div class="card">
   <h2>Your Shopping Cart</h2>
   <?php if (empty($_SESSION['cart'])): ?>
-    <p>Your cart is empty.</p>
+    <p class="muted">Your cart is empty. Browse the collection to find something you like.</p>
+    <a class="button-link" href="/products.php">Browse products</a>
   <?php else: ?>
     <table>
       <tr><th>Product</th><th>Quantity</th><th>Price</th><th>Subtotal</th><th>Action</th></tr>

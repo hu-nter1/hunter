@@ -161,6 +161,7 @@ header('X-Content-Type-Options: nosniff');
     </section>
     <p class="footnote">Protected training environment</p>
 </main>
+<?php require __DIR__ . '/includes/password_toggle.php'; ?>
 </body>
 </html>
 <?php

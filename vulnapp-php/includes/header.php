@@ -41,6 +41,7 @@ if (!VULN_MISSING_HEADERS) {
     button:hover, .button-link:hover { background:var(--brand-dark); color:#fff; transform:translateY(-1px); box-shadow:0 8px 18px rgba(57,71,173,.2); }
     label { font-size:13px; color:var(--muted); font-weight:650; }
     .error { background:#fff1f0; color:#a93a37; border:1px solid #f1d0ce; padding:12px 15px; border-radius:10px; margin-bottom:16px; font-size:14px; }
+    .success { background:#edf8f0; color:#247346; border:1px solid #c8e8d1; padding:12px 15px; border-radius:10px; margin-bottom:16px; font-size:14px; }
     .product-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,245px),1fr)); gap:20px; }
     .product { display:flex; flex-direction:column; min-width:0; background:var(--card); border:1px solid var(--line); border-radius:17px; padding:14px; box-shadow:0 8px 24px rgba(31,42,72,.055); transition:transform .2s,box-shadow .2s,border-color .2s; }
     .product:hover { transform:translateY(-4px); border-color:#c7cfee; box-shadow:0 18px 36px rgba(31,42,72,.12); }

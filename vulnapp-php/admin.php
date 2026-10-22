@@ -22,20 +22,33 @@ function check_admin() {
     }
 }
 
+$page = $_GET['page'] ?? 'dashboard.php';
+$target = 'pages/' . $page;
+$recordChecks = [
+    'edit_user.php' => 'users',
+    'edit_product.php' => 'products',
+];
+if (isset($recordChecks[$page])) {
+    $table = $recordChecks[$page];
+    $recordQuery = get_db()->prepare("SELECT 1 FROM $table WHERE id = ?");
+    $recordQuery->execute([(int)($_GET['id'] ?? 0)]);
+    if ($recordQuery->fetchColumn() === false) {
+        http_response_code(404);
+    }
+} elseif (!is_file($target)) {
+    http_response_code(404);
+}
+
 $page_title = 'Admin';
 require __DIR__ . '/includes/header.php';
 ?>
 <div class="card">
   <h2>Admin Panel</h2>
   <?php
-    $page = $_GET['page'] ?? 'dashboard.php';
-    $target = 'pages/' . $page;
-    
-    // Debugging
     if (file_exists($target)) {
         include $target;
     } else {
-        echo "<p style='color:red;'>Debug: Cannot find page: " . htmlspecialchars($target) . "</p>";
+        echo '<p class="error" role="alert">This admin section is unavailable. Return to the dashboard or choose another section.</p>';
     }
   ?>
 </div>

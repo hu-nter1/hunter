@@ -6,6 +6,9 @@ $id = (int)($_GET['id'] ?? 0);
 $stmt = get_db()->prepare("SELECT id, username, email, ssn, is_admin, balance FROM users WHERE id = ?");
 $stmt->execute([$id]);
 $profile = $stmt->fetch(PDO::FETCH_ASSOC);
+if (!$profile) {
+    http_response_code(404);
+}
 
 // Fetch user's exploited flags
 $flags = [];

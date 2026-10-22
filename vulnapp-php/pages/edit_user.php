@@ -4,6 +4,14 @@ $pdo = get_db();
 
 $id = (int)($_GET['id'] ?? 0);
 $current_user = current_user();
+$stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+$stmt->execute([$id]);
+$user = $stmt->fetch(PDO::FETCH_ASSOC);
+if (!$user) {
+    http_response_code(404);
+    echo '<p class="muted" role="status">User not found. Return to <a href="/admin.php?page=users.php">user management</a>.</p>';
+    return;
+}
 $success = false;
 
 // VULNERABLE: IDOR on profile edit (can edit anyone if ID is known)
@@ -27,9 +35,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $success = true;
 }
 
-$stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
-$stmt->execute([$id]);
-$user = $stmt->fetch(PDO::FETCH_ASSOC);
 ?>
 <h3>Edit User: <?= htmlspecialchars($user['username']) ?></h3>
 <?php if ($success): ?><p role="status">User updated.</p><?php endif; ?>

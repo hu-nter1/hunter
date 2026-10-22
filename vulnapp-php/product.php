@@ -13,6 +13,9 @@ $id = (int)($_GET['id'] ?? 0);
 $stmt = get_db()->prepare("SELECT * FROM products WHERE id = ?");
 $stmt->execute([$id]);
 $product = $stmt->fetch(PDO::FETCH_ASSOC);
+if (!$product) {
+    http_response_code(404);
+}
 
 $page_title = $product['name'] ?? 'Product';
 require __DIR__ . '/includes/header.php';
