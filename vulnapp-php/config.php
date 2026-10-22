@@ -209,8 +209,12 @@ function seed_vulnerability_flags(PDO $pdo) {
         }
 
         $inserted = 0;
+        $integerType = USE_POSTGRES ? 'BIGINT' : 'INTEGER';
+        $nextId = (int)$pdo->query(
+            "SELECT COALESCE(MAX(CAST(id AS $integerType)), 0) + 1 FROM flags"
+        )->fetchColumn();
         $find = $pdo->prepare('SELECT id FROM flags WHERE vulnerability_name = ?');
-        $insert = $pdo->prepare('INSERT INTO flags (vuln_id, vulnerability_name, flag) VALUES (?, ?, ?)');
+        $insert = $pdo->prepare('INSERT INTO flags (id, vuln_id, vulnerability_name, flag) VALUES (?, ?, ?, ?)');
         foreach (vulnerability_flag_catalog() as [$vulnerabilityId, $vulnerabilityName]) {
             $find->execute([$vulnerabilityName]);
             if ($find->fetchColumn() !== false) {
@@ -218,7 +222,7 @@ function seed_vulnerability_flags(PDO $pdo) {
             }
 
             $flag = 'FLAG{' . strtoupper(bin2hex(random_bytes(16))) . '}';
-            $insert->execute([$vulnerabilityId, $vulnerabilityName, $flag]);
+            $insert->execute([$nextId++, $vulnerabilityId, $vulnerabilityName, $flag]);
             $inserted++;
         }
 
