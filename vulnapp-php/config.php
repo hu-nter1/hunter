@@ -80,22 +80,68 @@ if (VULN_VERBOSE_ERRORS) {
     error_reporting(0);
 }
 
-// Railway volumes can be mounted at /app/data; local runs use the app directory.
-$dataDir = getenv('APP_DATA_DIR') ?: __DIR__ . '/data';
-if (!is_dir($dataDir) && !mkdir($dataDir, 0775, true) && !is_dir($dataDir)) {
-    throw new RuntimeException('Unable to create the application data directory.');
+$databaseUrl = getenv('DATABASE_URL');
+define('USE_POSTGRES', $databaseUrl !== false && $databaseUrl !== '');
+
+if (!USE_POSTGRES) {
+    $dataDir = getenv('APP_DATA_DIR') ?: __DIR__ . '/data';
+    if (!is_dir($dataDir) && !mkdir($dataDir, 0775, true) && !is_dir($dataDir)) {
+        throw new RuntimeException('Unable to create the application data directory.');
+    }
+    define('DB_PATH', $dataDir . '/vulnapp.db');
 }
-define('DB_PATH', $dataDir . '/vulnapp.db');
 define('UPLOAD_DIR', __DIR__ . '/uploads/');
 
 function get_db() {
     static $pdo = null;
     if ($pdo === null) {
-        $pdo = new PDO('sqlite:' . DB_PATH);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        if (USE_POSTGRES) {
+            $databaseUrl = getenv('DATABASE_URL');
+            $parts = parse_url($databaseUrl);
+            if ($parts === false || empty($parts['host']) || empty($parts['path'])) {
+                throw new RuntimeException('DATABASE_URL is not a valid PostgreSQL connection URL.');
+            }
+
+            $query = [];
+            parse_str($parts['query'] ?? '', $query);
+            $sslMode = $query['sslmode'] ?? 'require';
+            $channelBinding = $query['channel_binding'] ?? null;
+            $dsn = sprintf(
+                'pgsql:host=%s;port=%d;dbname=%s;sslmode=%s',
+                $parts['host'],
+                $parts['port'] ?? 5432,
+                rawurldecode(ltrim($parts['path'], '/')),
+                $sslMode
+            );
+            if ($channelBinding !== null) {
+                $dsn .= ';channel_binding=' . $channelBinding;
+            }
+
+            $pdo = new PDO(
+                $dsn,
+                rawurldecode($parts['user'] ?? ''),
+                rawurldecode($parts['pass'] ?? ''),
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+        } else {
+            $pdo = new PDO('sqlite:' . DB_PATH);
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        }
         initialize_schema($pdo);
     }
     return $pdo;
+}
+
+function insert_and_get_id(PDO $pdo, $sql, array $params = []) {
+    if (USE_POSTGRES) {
+        $stmt = $pdo->prepare($sql . ' RETURNING id');
+        $stmt->execute($params);
+        return $stmt->fetchColumn();
+    }
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return $pdo->lastInsertId();
 }
 
 function save_product_image_upload($field = 'product_image') {
@@ -133,17 +179,24 @@ function save_product_image_upload($field = 'product_image') {
 }
 
 function initialize_schema(PDO $pdo) {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, password TEXT, email TEXT, is_admin INTEGER DEFAULT 0, ssn TEXT, balance REAL DEFAULT 0.0)");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, description TEXT, price REAL, image_url TEXT)");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, author TEXT, body TEXT)");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, total REAL, shipping_address TEXT, status TEXT DEFAULT 'pending', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, product_id INTEGER, quantity INTEGER)");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, user_id INTEGER, comment TEXT)");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS access_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ua TEXT)");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS remember_tokens (id INTEGER PRIMARY KEY, user_id INTEGER, token TEXT)");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS flags (id INTEGER PRIMARY KEY, vuln_id TEXT, flag TEXT)");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS hall_of_fame (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, vuln_id TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
-    $pdo->exec("CREATE TABLE IF NOT EXISTS activity_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, action TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
+    $autoId = USE_POSTGRES ? 'BIGSERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+    $timestampType = USE_POSTGRES ? 'TIMESTAMP' : 'DATETIME';
+    $tables = [
+        'users' => "(id $autoId, username TEXT, password TEXT, email TEXT, is_admin INTEGER DEFAULT 0, ssn TEXT, balance REAL DEFAULT 0.0)",
+        'products' => "(id $autoId, name TEXT, description TEXT, price REAL, image_url TEXT)",
+        'comments' => "(id $autoId, product_id INTEGER, author TEXT, body TEXT)",
+        'orders' => "(id $autoId, user_id INTEGER, total REAL, shipping_address TEXT, status TEXT DEFAULT 'pending', created_at $timestampType DEFAULT CURRENT_TIMESTAMP)",
+        'order_items' => "(id $autoId, order_id INTEGER, product_id INTEGER, quantity INTEGER)",
+        'reviews' => "(id $autoId, product_id INTEGER, user_id INTEGER, comment TEXT)",
+        'access_logs' => "(id $autoId, ua TEXT)",
+        'remember_tokens' => '(id INTEGER PRIMARY KEY, user_id INTEGER, token TEXT)',
+        'flags' => '(id INTEGER PRIMARY KEY, vuln_id TEXT, flag TEXT)',
+        'hall_of_fame' => "(id $autoId, username TEXT, vuln_id TEXT, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
+        'activity_logs' => "(id $autoId, username TEXT, action TEXT, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
+    ];
+    foreach ($tables as $table => $definition) {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS $table $definition");
+    }
 
     $columns = [
         'users' => [
@@ -156,14 +209,20 @@ function initialize_schema(PDO $pdo) {
         'orders' => [
             'shipping_address' => 'TEXT',
             'status' => "TEXT DEFAULT 'pending'",
-            'created_at' => 'DATETIME',
+            'created_at' => USE_POSTGRES ? 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' : 'DATETIME',
         ],
-        'hall_of_fame' => ['timestamp' => 'DATETIME'],
-        'activity_logs' => ['timestamp' => 'DATETIME'],
+        'hall_of_fame' => ['timestamp' => USE_POSTGRES ? 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' : 'DATETIME'],
+        'activity_logs' => ['timestamp' => USE_POSTGRES ? 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' : 'DATETIME'],
     ];
 
     foreach ($columns as $table => $definitions) {
-        $existingColumns = $pdo->query("PRAGMA table_info($table)")->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (USE_POSTGRES) {
+            $stmt = $pdo->prepare('SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?');
+            $stmt->execute([$table]);
+            $existingColumns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        } else {
+            $existingColumns = $pdo->query("PRAGMA table_info($table)")->fetchAll(PDO::FETCH_COLUMN, 1);
+        }
         foreach ($definitions as $column => $definition) {
             if (!in_array($column, $existingColumns, true)) {
                 $pdo->exec("ALTER TABLE $table ADD COLUMN $column $definition");
@@ -171,9 +230,11 @@ function initialize_schema(PDO $pdo) {
         }
     }
 
-    $pdo->exec("CREATE TRIGGER IF NOT EXISTS orders_created_at_default AFTER INSERT ON orders WHEN NEW.created_at IS NULL BEGIN UPDATE orders SET created_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
-    $pdo->exec("CREATE TRIGGER IF NOT EXISTS hall_of_fame_timestamp_default AFTER INSERT ON hall_of_fame WHEN NEW.timestamp IS NULL BEGIN UPDATE hall_of_fame SET timestamp = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
-    $pdo->exec("CREATE TRIGGER IF NOT EXISTS activity_logs_timestamp_default AFTER INSERT ON activity_logs WHEN NEW.timestamp IS NULL BEGIN UPDATE activity_logs SET timestamp = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
+    if (!USE_POSTGRES) {
+        $pdo->exec("CREATE TRIGGER IF NOT EXISTS orders_created_at_default AFTER INSERT ON orders WHEN NEW.created_at IS NULL BEGIN UPDATE orders SET created_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
+        $pdo->exec("CREATE TRIGGER IF NOT EXISTS hall_of_fame_timestamp_default AFTER INSERT ON hall_of_fame WHEN NEW.timestamp IS NULL BEGIN UPDATE hall_of_fame SET timestamp = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
+        $pdo->exec("CREATE TRIGGER IF NOT EXISTS activity_logs_timestamp_default AFTER INSERT ON activity_logs WHEN NEW.timestamp IS NULL BEGIN UPDATE activity_logs SET timestamp = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
+    }
 }
 
 function seed_db() {
@@ -195,11 +256,8 @@ function seed_db() {
     }
 }
 
-if (!file_exists(DB_PATH)) {
-    seed_db();
-} else {
-    get_db();
-}
+get_db();
+seed_db();
 
 class Logger {
     public $logFile = 'app.log';

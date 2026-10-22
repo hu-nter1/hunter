@@ -2,13 +2,12 @@
 # and lets the demo SQLite DB live inside the container. See VULNERABILITIES.md.
 FROM php:8.2-cli
 
-# pdo_sqlite needs SQLite's dev headers (libsqlite3-dev) to build; the base image doesn't
-# ship them. --no-install-recommends + apt cache cleanup keeps the image small.
+# PDO SQLite and PostgreSQL need their development headers to build the PDO drivers.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libsqlite3-dev \
+    && apt-get install -y --no-install-recommends libsqlite3-dev libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN docker-php-ext-install pdo pdo_sqlite
+RUN docker-php-ext-install pdo pdo_sqlite pdo_pgsql
 
 WORKDIR /app
 COPY . /app

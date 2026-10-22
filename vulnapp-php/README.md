@@ -18,11 +18,13 @@ product cards preserve image aspect ratios and fit images within each card.
 The file upload (page 4) and the LFI (page 5) chain together into full remote code execution — see **VULNERABILITIES.md** for the exact walkthrough, plus curl commands and CWE ids for every bug.
 
 ## Setup
-Needs PHP 8.x with the `sqlite3`/`pdo_sqlite` extension (commonly `php-sqlite3` on Debian/Ubuntu).
+Needs PHP 8.x with the `sqlite3`/`pdo_sqlite` extension for local development (commonly
+`php-sqlite3` on Debian/Ubuntu). The container also includes `pdo_pgsql` for Neon.
 ```bash
 php -S 127.0.0.1:8081
 ```
 Visit `http://127.0.0.1:8081`. `data/vulnapp.db` is created and seeded automatically on first request; delete it to reset.
+To use PostgreSQL instead, set `DATABASE_URL` to a PostgreSQL connection URL; the schema and demo rows are initialized automatically.
 
 Demo logins: `alice/alice123`, `bob/bobpass`, `admin/admin!2024`
 
@@ -63,7 +65,10 @@ all of which need a normal always-on filesystem and process, which Railway provi
 A `Dockerfile` is included (installs PHP's `pdo_sqlite` extension, protects PHP requests with
 HTTP Basic Auth, and runs the built-in PHP server on Railway's `$PORT`). Set `LAB_AUTH_USER`,
 `LAB_AUTH_PASS`, and `SUPERADMIN_KEY` in Railway's service variables before exposing the app.
-For persistent data, attach a Railway volume at `/app/data` and set `APP_DATA_DIR=/app/data`.
+For persistent relational data, set `DATABASE_URL` to a Neon PostgreSQL connection URL in the
+Render service environment. Neon URLs must use SSL (`sslmode=require`). Product uploads remain in
+the app's `uploads/` directory and require separate persistent file storage if they must survive
+container redeploys.
 From the `vulnapp-php` folder:
 ```bash
 railway init      # first time only

@@ -36,9 +36,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm'])) {
     $pdo->beginTransaction();
     $pdo->prepare("UPDATE users SET balance = balance - ? WHERE id = ?")->execute([$total, $user['id']]);
 
-    $stmt = $pdo->prepare("INSERT INTO orders (user_id, total, shipping_address, status) VALUES (?, ?, ?, 'pending')");
-    $stmt->execute([$user['id'], $total, $full_shipping]);
-    $orderId = $pdo->lastInsertId();
+    $orderId = insert_and_get_id(
+        $pdo,
+        "INSERT INTO orders (user_id, total, shipping_address, status) VALUES (?, ?, ?, 'pending')",
+        [$user['id'], $total, $full_shipping]
+    );
 
     $itemStmt = $pdo->prepare("INSERT INTO order_items (order_id, product_id, quantity) VALUES (?, ?, ?)");
     foreach ($_SESSION['cart'] as $itemId => $quantity) {

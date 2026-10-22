@@ -4,6 +4,8 @@ data/
 *.log
 *.bak
 .env
+.env.*
+.gitignore
 .htpasswd
 uploads/*
 !uploads/.gitkeep
