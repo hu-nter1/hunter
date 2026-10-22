@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/config.php';
+require __DIR__ . '/includes/session_check.php';
 require __DIR__ . '/includes/header.php';
 $pdo = get_db();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

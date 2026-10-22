@@ -6,6 +6,13 @@ require __DIR__ . '/includes/session_check.php';
 if (!isset($_SESSION['cart'])) {
     $_SESSION['cart'] = [];
 }
+foreach ($_SESSION['cart'] as $cartProductId => $cartQuantity) {
+    if ((int)$cartProductId < 1 || (int)$cartQuantity < 1) {
+        unset($_SESSION['cart'][$cartProductId]);
+    } else {
+        $_SESSION['cart'][$cartProductId] = (int)$cartQuantity;
+    }
+}
 
 $action = $_GET['action'] ?? '';
 $id = (int)($_GET['id'] ?? 0);
@@ -13,7 +20,7 @@ $id = (int)($_GET['id'] ?? 0);
 // Add item
 if ($action === 'add' && $id > 0) {
     $qty = (int)($_POST['quantity'] ?? 1);
-    if ($qty < 1) $qty = 1;
+    $qty = max(1, $qty);
     $_SESSION['cart'][$id] = ($_SESSION['cart'][$id] ?? 0) + $qty;
     header('Location: /cart.php');
     exit;
@@ -28,12 +35,8 @@ if ($action === 'remove' && $id > 0) {
 
 // Update quantity
 if ($action === 'update' && $id > 0) {
-    $qty = (int)($_POST['quantity'] ?? 0);
-    if ($qty <= 0) {
-        unset($_SESSION['cart'][$id]);
-    } else {
-        $_SESSION['cart'][$id] = $qty;
-    }
+    $qty = max(1, (int)($_POST['quantity'] ?? 1));
+    $_SESSION['cart'][$id] = $qty;
     header('Location: /cart.php');
     exit;
 }
@@ -42,7 +45,6 @@ $page_title = 'Shopping Cart';
 require __DIR__ . '/includes/header.php';
 $pdo = get_db();
 $total = 0;
-$user = current_user();
 ?>
 <div class="card">
   <h2>Your Shopping Cart</h2>
@@ -63,7 +65,7 @@ $user = current_user();
           <td><?= htmlspecialchars($p['name']) ?></td>
           <td>
             <form method="POST" action="/cart.php?action=update&id=<?= (int)$item_id ?>">
-                <input type="number" name="quantity" value="<?= (int)$qty ?>" min="0" style="width:50px;">
+                <input type="number" name="quantity" value="<?= max(1, (int)$qty) ?>" min="1" style="width:60px;">
                 <button type="submit">Update</button>
             </form>
           </td>
@@ -76,12 +78,7 @@ $user = current_user();
     <h3>Total: $<?= htmlspecialchars((float)$total) ?></h3>
     
     <div style="margin-top:20px;">
-        <?php if ($user && $user['balance'] < $total): ?>
-            <p style="color: red; font-weight: bold;">Insufficient balance. Please add money to your wallet to purchase these items.</p>
-            <a href="/profile.php?id=<?= (int)$user['id'] ?>"><button>Add Funds to Wallet</button></a>
-        <?php else: ?>
-            <a href="/checkout.php"><button>Proceed to Checkout</button></a>
-        <?php endif; ?>
+        <a href="/checkout.php"><button>Proceed to Checkout</button></a>
     </div>
   <?php endif; ?>
 </div>

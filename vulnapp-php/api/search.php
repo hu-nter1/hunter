@@ -3,10 +3,10 @@ require __DIR__ . '/../config.php';
 $q = $_GET['q'] ?? '';
 
 if (VULN_SQLI_PRODUCT_SEARCH) {
-    $sql = "SELECT id, name, description, price, image_url FROM products WHERE name LIKE '%$q%'";
+    $sql = "SELECT id, name, description, price, image_url FROM products WHERE LOWER(name) LIKE LOWER('%$q%')";
     $items = get_db()->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 } else {
-    $stmt = get_db()->prepare("SELECT id, name, description, price, image_url FROM products WHERE name LIKE ?");
+    $stmt = get_db()->prepare("SELECT id, name, description, price, image_url FROM products WHERE LOWER(name) LIKE LOWER(?)");
     $stmt->execute(['%' . $q . '%']);
     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
