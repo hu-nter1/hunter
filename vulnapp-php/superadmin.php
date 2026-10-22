@@ -166,9 +166,9 @@ $heroes = $pdo->query(
         <td><input form="<?= htmlspecialchars($productFormId) ?>" type="text" name="name" value="<?= htmlspecialchars($p['name']) ?>"></td>
         <td><textarea form="<?= htmlspecialchars($productFormId) ?>" name="description"><?= htmlspecialchars($p['description']) ?></textarea></td>
         <td><input form="<?= htmlspecialchars($productFormId) ?>" type="number" step="0.01" name="price" value="<?= (float)$p['price'] ?>"></td>
-        <td><input form="<?= htmlspecialchars($productFormId) ?>" type="url" name="image_url" value="<?= htmlspecialchars($p['image_url'] ?? '') ?>" placeholder="https://example.com/product.jpg"><input form="<?= htmlspecialchars($productFormId) ?>" type="file" name="product_image" accept="image/jpeg,image/png,image/gif,image/webp"></td>
+        <td><input form="<?= htmlspecialchars($productFormId) ?>" type="text" name="image_url" value="<?= htmlspecialchars($p['image_url'] ?? '') ?>" placeholder="https://example.com/product.jpg or /uploads/image.jpg"><input form="<?= htmlspecialchars($productFormId) ?>" type="file" name="product_image" accept="image/jpeg,image/png,image/gif,image/webp"></td>
         <td><button form="<?= htmlspecialchars($productFormId) ?>" type="submit" name="edit_product" class="btn">Save</button>
-        <button form="<?= htmlspecialchars($productFormId) ?>" type="submit" name="delete_product" class="btn btn-red">Delete</button></td>
+        <button form="<?= htmlspecialchars($productFormId) ?>" type="submit" name="delete_product" formnovalidate class="btn btn-red">Delete</button></td>
     </tr>
     <?php endforeach; ?></table>
 </div>
