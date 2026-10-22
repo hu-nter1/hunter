@@ -20,7 +20,7 @@ require __DIR__ . '/includes/header.php';
 <?php if ($product): ?>
 <div class="card">
   <?php if (!empty($product['image_url'])): ?>
-    <img src="<?= htmlspecialchars($product['image_url']) ?>" style="max-width: 100%; height: auto; border-radius: 8px; margin-bottom: 15px;">
+    <img class="product-detail-image" src="<?= htmlspecialchars($product['image_url']) ?>" alt="<?= htmlspecialchars($product['name']) ?>">
   <?php endif; ?>
   <h2><?= htmlspecialchars($product['name']) ?></h2>
   <p><?= htmlspecialchars($product['description']) ?></p>

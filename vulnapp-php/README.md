@@ -12,6 +12,9 @@ A normal-looking 5-page shop built in plain PHP + PDO/SQLite (no framework) as a
 5. `admin.php` — broken access control, local file inclusion, OS command injection
 6. `register.php` — mass assignment (register as admin), user enumeration, no password policy
 
+Admin product management accepts an image URL or a local JPG, PNG, GIF, or WebP upload. Storefront
+product cards preserve image aspect ratios and fit images within each card.
+
 The file upload (page 4) and the LFI (page 5) chain together into full remote code execution — see **VULNERABILITIES.md** for the exact walkthrough, plus curl commands and CWE ids for every bug.
 
 ## Setup

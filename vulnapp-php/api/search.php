@@ -14,7 +14,9 @@ if (VULN_SQLI_PRODUCT_SEARCH) {
 foreach ($items as $p): ?>
     <div class="product">
       <?php if (!empty($p['image_url'])): ?>
-        <img src="<?= htmlspecialchars($p['image_url']) ?>" style="width:100%; height:150px; object-fit:cover; border-radius:8px; margin-bottom:10px;">
+        <div class="product-image-frame">
+          <img src="<?= htmlspecialchars($p['image_url']) ?>" alt="<?= htmlspecialchars($p['name']) ?>">
+        </div>
       <?php endif; ?>
       <h3><a href="/product.php?id=<?= (int)$p['id'] ?>"><?= htmlspecialchars($p['name']) ?></a></h3>
       <p class="muted"><?= htmlspecialchars($p['description']) ?></p>

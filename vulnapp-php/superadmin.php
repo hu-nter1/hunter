@@ -32,6 +32,7 @@ if (empty($_SESSION['superadmin_authenticated'])) {
     exit;
 }
 $pdo = get_db();
+$adminError = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['add_balance'])) {
@@ -41,23 +42,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($_POST['promote_admin'])) {
         $pdo->prepare("UPDATE users SET is_admin = 1 WHERE id = ?")->execute([$_POST['user_id']]);
     } elseif (isset($_POST['add_product'])) {
-        $image_url = $_POST['image_url'] ?? '';
-        if (!empty($_FILES['product_image']['name'])) {
-            $img_name = bin2hex(random_bytes(8)) . '_' . basename($_FILES['product_image']['name']);
-            move_uploaded_file($_FILES['product_image']['tmp_name'], __DIR__ . '/uploads/' . $img_name);
-            $image_url = '/uploads/' . $img_name;
+        try {
+            $image_url = trim($_POST['image_url'] ?? '');
+            $uploadedImage = save_product_image_upload();
+            if ($uploadedImage !== null) {
+                $image_url = $uploadedImage;
+            }
+            $stmt = $pdo->prepare("INSERT INTO products (name, description, price, image_url) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$_POST['name'], $_POST['description'], $_POST['price'], $image_url]);
+        } catch (RuntimeException $exception) {
+            $adminError = $exception->getMessage();
         }
-        $stmt = $pdo->prepare("INSERT INTO products (name, description, price, image_url) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$_POST['name'], $_POST['description'], $_POST['price'], $image_url]);
     } elseif (isset($_POST['edit_product'])) {
-        $image_url = $_POST['image_url'] ?? '';
-        if (!empty($_FILES['product_image']['name'])) {
-            $img_name = bin2hex(random_bytes(8)) . '_' . basename($_FILES['product_image']['name']);
-            move_uploaded_file($_FILES['product_image']['tmp_name'], __DIR__ . '/uploads/' . $img_name);
-            $image_url = '/uploads/' . $img_name;
+        try {
+            $image_url = trim($_POST['image_url'] ?? '');
+            $uploadedImage = save_product_image_upload();
+            if ($uploadedImage !== null) {
+                $image_url = $uploadedImage;
+            }
+            $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, price = ?, image_url = ? WHERE id = ?");
+            $stmt->execute([$_POST['name'], $_POST['description'], $_POST['price'], $image_url, $_POST['product_id']]);
+        } catch (RuntimeException $exception) {
+            $adminError = $exception->getMessage();
         }
-        $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, price = ?, image_url = ? WHERE id = ?");
-        $stmt->execute([$_POST['name'], $_POST['description'], $_POST['price'], $image_url, $_POST['product_id']]);
     } elseif (isset($_POST['delete_product'])) {
         $pdo->prepare("DELETE FROM products WHERE id = ?")->execute([$_POST['product_id']]);
     }
@@ -90,24 +97,33 @@ $heroes = $pdo->query("SELECT h.*, u.email FROM hall_of_fame h JOIN users u ON h
     <?php endforeach; ?></table>
 </div>
 <div class="card"><h3>Manage Products</h3>
+    <?php if ($adminError !== null): ?><p role="alert"><?= htmlspecialchars($adminError) ?></p><?php endif; ?>
     <form method="POST" enctype="multipart/form-data" style="margin-bottom:20px; padding:10px; background:#f9f9f9; border-radius:5px;">
         <input type="text" name="name" placeholder="Name" required>
         <textarea name="description" placeholder="Description" required></textarea>
         <input type="number" step="0.01" name="price" placeholder="Price" required>
-        <input type="text" name="image_url" placeholder="Image URL">
-        <input type="file" name="product_image">
+        <label>Product image URL</label>
+        <input type="url" name="image_url" placeholder="https://example.com/product.jpg">
+        <label>Or upload an image from your computer</label>
+        <input type="file" name="product_image" accept="image/jpeg,image/png,image/gif,image/webp">
         <button type="submit" name="add_product" class="btn">Add New Product</button>
     </form>
-    <table><tr><th>Name</th><th>Desc</th><th>Price</th><th>Action</th></tr>
+    <table><tr><th>Image</th><th>Name</th><th>Description</th><th>Price</th><th>Image URL / Upload</th><th>Action</th></tr>
     <?php foreach($products as $p): ?>
-    <tr><form method="POST" enctype="multipart/form-data">
-        <input type="hidden" name="product_id" value="<?= $p['id'] ?>">
-        <td><input type="text" name="name" value="<?= htmlspecialchars($p['name']) ?>"></td>
-        <td><textarea name="description"><?= htmlspecialchars($p['description']) ?></textarea></td>
-        <td><input type="number" step="0.01" name="price" value="<?= (float)$p['price'] ?>"></td>
-        <td><button type="submit" name="edit_product" class="btn">Save</button>
-        <button type="submit" name="delete_product" class="btn btn-red">Delete</button></td>
-    </form></tr>
+    <?php $productFormId = 'edit-product-' . (int)$p['id']; ?>
+    <tr>
+        <td>
+            <form id="<?= htmlspecialchars($productFormId) ?>" method="POST" enctype="multipart/form-data"></form>
+            <input type="hidden" form="<?= htmlspecialchars($productFormId) ?>" name="product_id" value="<?= (int)$p['id'] ?>">
+            <?php if (!empty($p['image_url'])): ?><img src="<?= htmlspecialchars($p['image_url']) ?>" alt="<?= htmlspecialchars($p['name']) ?>" style="width:64px;height:64px;object-fit:contain;"><?php endif; ?>
+        </td>
+        <td><input form="<?= htmlspecialchars($productFormId) ?>" type="text" name="name" value="<?= htmlspecialchars($p['name']) ?>"></td>
+        <td><textarea form="<?= htmlspecialchars($productFormId) ?>" name="description"><?= htmlspecialchars($p['description']) ?></textarea></td>
+        <td><input form="<?= htmlspecialchars($productFormId) ?>" type="number" step="0.01" name="price" value="<?= (float)$p['price'] ?>"></td>
+        <td><input form="<?= htmlspecialchars($productFormId) ?>" type="url" name="image_url" value="<?= htmlspecialchars($p['image_url'] ?? '') ?>" placeholder="https://example.com/product.jpg"><input form="<?= htmlspecialchars($productFormId) ?>" type="file" name="product_image" accept="image/jpeg,image/png,image/gif,image/webp"></td>
+        <td><button form="<?= htmlspecialchars($productFormId) ?>" type="submit" name="edit_product" class="btn">Save</button>
+        <button form="<?= htmlspecialchars($productFormId) ?>" type="submit" name="delete_product" class="btn btn-red">Delete</button></td>
+    </tr>
     <?php endforeach; ?></table>
 </div>
 <div class="card"><h3>Hall of Heroes</h3>

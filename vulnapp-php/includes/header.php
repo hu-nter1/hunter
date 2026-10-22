@@ -29,6 +29,9 @@ if (!VULN_MISSING_HEADERS) {
     .error { background:#fef2f2; color:#b91c1c; padding:10px 14px; border-radius:6px; margin-bottom:16px; font-size:14px; }
     .product-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap:16px; }
     .product { background:var(--card); border-radius:10px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+    .product-image-frame { width:100%; aspect-ratio:4/3; display:flex; align-items:center; justify-content:center; overflow:hidden; margin-bottom:12px; border-radius:8px; background:#f8f9fb; }
+    .product-image-frame img { display:block; max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; }
+    .product-detail-image { display:block; max-width:100%; max-height:min(65vh,520px); width:auto; height:auto; object-fit:contain; margin:0 auto 15px; }
     .product h3 { margin:4px 0; font-size:15px; }
     .product a { color: var(--text); text-decoration:none; }
     .price { color: var(--brand); font-weight:700; }

@@ -98,6 +98,40 @@ function get_db() {
     return $pdo;
 }
 
+function save_product_image_upload($field = 'product_image') {
+    if (!isset($_FILES[$field]) || $_FILES[$field]['error'] === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+
+    $file = $_FILES[$field];
+    if ($file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
+        throw new RuntimeException('The product image could not be uploaded.');
+    }
+
+    $image = getimagesize($file['tmp_name']);
+    $extensions = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/gif' => 'gif',
+        'image/webp' => 'webp',
+    ];
+    $mimeType = $image['mime'] ?? '';
+    if ($image === false || !isset($extensions[$mimeType])) {
+        throw new RuntimeException('Choose a valid JPG, PNG, GIF, or WebP image.');
+    }
+
+    if (!is_dir(UPLOAD_DIR) && !mkdir(UPLOAD_DIR, 0775, true) && !is_dir(UPLOAD_DIR)) {
+        throw new RuntimeException('The product image directory is unavailable.');
+    }
+
+    $filename = bin2hex(random_bytes(16)) . '.' . $extensions[$mimeType];
+    if (!move_uploaded_file($file['tmp_name'], UPLOAD_DIR . $filename)) {
+        throw new RuntimeException('The product image could not be saved.');
+    }
+
+    return '/uploads/' . $filename;
+}
+
 function initialize_schema(PDO $pdo) {
     $pdo->exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, password TEXT, email TEXT, is_admin INTEGER DEFAULT 0, ssn TEXT, balance REAL DEFAULT 0.0)");
     $pdo->exec("CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, description TEXT, price REAL, image_url TEXT)");
