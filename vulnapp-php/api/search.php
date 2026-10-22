@@ -11,15 +11,36 @@ if (VULN_SQLI_PRODUCT_SEARCH) {
     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-foreach ($items as $p): ?>
+foreach ($items as $p):
+    $productName = strtolower($p['name']);
+    if (str_contains($productName, 'mouse')) {
+        $placeholderIcon = '⌁';
+    } elseif (str_contains($productName, 'keyboard')) {
+        $placeholderIcon = '⌨';
+    } elseif (str_contains($productName, 'hub')) {
+        $placeholderIcon = '◇';
+    } elseif (str_contains($productName, 'webcam') || str_contains($productName, 'camera')) {
+        $placeholderIcon = '◉';
+    } elseif (str_contains($productName, 'stand')) {
+        $placeholderIcon = '⌃';
+    } else {
+        $placeholderIcon = '✦';
+    }
+?>
     <div class="product">
       <?php if (!empty($p['image_url'])): ?>
         <div class="product-image-frame">
           <img src="<?= htmlspecialchars($p['image_url']) ?>" alt="<?= htmlspecialchars($p['name']) ?>">
         </div>
+      <?php else: ?>
+        <div class="product-image-frame product-placeholder" aria-hidden="true">
+          <span class="placeholder-icon"><?= htmlspecialchars($placeholderIcon) ?></span>
+          <span class="placeholder-caption">ShopEase essentials</span>
+        </div>
       <?php endif; ?>
       <h3><a href="/product.php?id=<?= (int)$p['id'] ?>"><?= htmlspecialchars($p['name']) ?></a></h3>
       <p class="muted"><?= htmlspecialchars($p['description']) ?></p>
-      <div class="price">$<?= htmlspecialchars((float)$p['price']) ?></div>
+      <div class="price">$<?= number_format((float)$p['price'], 2) ?></div>
+      <div class="product-actions"><a href="/product.php?id=<?= (int)$p['id'] ?>">View product details&nbsp; →</a></div>
     </div>
 <?php endforeach; 

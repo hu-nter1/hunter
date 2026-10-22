@@ -243,16 +243,16 @@ function seed_db() {
         $pdo->exec("INSERT INTO users (username, password, email, is_admin, ssn) VALUES
         ('alice','alice123','alice@example.com',0,'123-45-6789'),
         ('bob','bobpass','bob@example.com',0,'987-65-4321'),
-        ('admin','admin123','admin@example.com',1,'000-00-0000')");
+        ('admin','admin!2024','admin@example.com',1,'000-00-0000')");
     }
 
     if ((int)$pdo->query("SELECT COUNT(*) FROM products")->fetchColumn() === 0) {
-        $pdo->exec("INSERT INTO products (name, description, price) VALUES
-        ('Wireless Mouse','Ergonomic 2.4GHz wireless mouse',19.99),
-        ('Mechanical Keyboard','RGB backlit mechanical keyboard',59.99),
-        ('USB-C Hub','7-in-1 USB-C hub with HDMI',29.99),
-        ('Webcam 1080p','Full HD webcam with autofocus',34.99),
-        ('Laptop Stand','Aluminum adjustable laptop stand',24.99)");
+        $pdo->exec("INSERT INTO products (name, description, price, image_url) VALUES
+        ('Wireless Mouse','Ergonomic 2.4GHz wireless mouse',19.99,'https://images.unsplash.com/photo-1527814050087-3793815479db?auto=format&fit=crop&w=800&q=80'),
+        ('Mechanical Keyboard','RGB backlit mechanical keyboard',59.99,'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=800&q=80'),
+        ('USB-C Hub','7-in-1 USB-C hub with HDMI',29.99,'https://images.unsplash.com/photo-1625842268584-8f3296236761?auto=format&fit=crop&w=800&q=80'),
+        ('Webcam 1080p','Full HD webcam with autofocus',34.99,'https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=800&q=80'),
+        ('Laptop Stand','Aluminum adjustable laptop stand',24.99,'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=800&q=80')");
     }
 }
 

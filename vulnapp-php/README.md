@@ -1,6 +1,6 @@
 # ShopEase (PHP)
 
-A normal-looking 5-page shop built in plain PHP + PDO/SQLite (no framework) as an intentionally vulnerable target for security/API testing practice.
+A normal-looking 5-page shop built in plain PHP + PDO (no framework) as an intentionally vulnerable target for security/API testing practice.
 
 ⚠️ **For local, authorized testing only.** Do not deploy publicly, do not use real data.
 
@@ -24,7 +24,13 @@ Needs PHP 8.x with the `sqlite3`/`pdo_sqlite` extension for local development (c
 php -S 127.0.0.1:8081
 ```
 Visit `http://127.0.0.1:8081`. `data/vulnapp.db` is created and seeded automatically on first request; delete it to reset.
-To use PostgreSQL instead, set `DATABASE_URL` to a PostgreSQL connection URL; the schema and demo rows are initialized automatically.
+To use PostgreSQL instead, set `DATABASE_URL` to a PostgreSQL connection URL; the schema and demo rows are initialized automatically. The seeded catalog includes product photography, and an empty database receives the demo users and products.
+
+To intentionally replace **all** shop records in a PostgreSQL database with the demo users and products, set `DATABASE_URL` to that database and run the reset command from a one-off job:
+```bash
+php scripts/reset_demo_data.php --confirm
+```
+This truncates the users, products, orders, comments, reviews, flags, and activity tables before reseeding. It refuses to run from a web request or against SQLite. Only use it when replacing the existing data is intended.
 
 Demo logins: `alice/alice123`, `bob/bobpass`, `admin/admin!2024`
 
@@ -54,29 +60,17 @@ curl -i -X POST http://127.0.0.1:8081/register.php \
 ```
 Delete `vulnapp.db` any time to reset to the seeded demo data.
 
-## Deploying
-This is a single PHP app (server-rendered pages + a SQLite file + an `uploads/` folder it writes
-to), not a split frontend/API like the other editions — so it deploys as **one service**, and
-**Railway (not Vercel)** is the right target: Vercel's PHP support is unofficial and its functions
-are stateless/ephemeral, which breaks the SQLite file, the uploads/LFI/RCE chain, and sessions —
-all of which need a normal always-on filesystem and process, which Railway provides.
+## Deploying to Render
+This is a single PHP service. The included Dockerfile installs PDO support for SQLite and
+PostgreSQL and enables the HTTP Basic Auth gate. Configure `LAB_AUTH_USER`, `LAB_AUTH_PASS`,
+and `SUPERADMIN_KEY` in the Render service environment before exposing the intentionally
+vulnerable lab.
 
-### Railway
-A `Dockerfile` is included (installs PHP's `pdo_sqlite` extension, protects PHP requests with
-HTTP Basic Auth, and runs the built-in PHP server on Railway's `$PORT`). Set `LAB_AUTH_USER`,
-`LAB_AUTH_PASS`, and `SUPERADMIN_KEY` in Railway's service variables before exposing the app.
-For persistent relational data, set `DATABASE_URL` to a Neon PostgreSQL connection URL in the
-Render service environment. Neon URLs must use SSL (`sslmode=require`). Product uploads remain in
-the app's `uploads/` directory and require separate persistent file storage if they must survive
-container redeploys.
-From the `vulnapp-php` folder:
-```bash
-railway init      # first time only
-railway up
-```
-Railway builds the Dockerfile and gives you a `https://<name>.up.railway.app` URL. Keep the
-service private or retain the configured Basic Auth gate; this app intentionally contains
-vulnerabilities that can lead to remote code execution.
+For durable relational data, set `DATABASE_URL` as a secret environment variable in the Render
+service, using a Neon PostgreSQL URL with SSL (`sslmode=require`). When Neon is empty, the app
+creates its schema and seeds the demo accounts and product catalog. Product uploads remain in
+`uploads/` and need separate durable file storage to survive redeploys.
 
-Without a mounted volume, the database and uploaded files use the container filesystem and may
-not survive redeploys. `uploads/` is intentionally writable for the lab exercises.
+If replacing existing database contents is intended, run
+`php scripts/reset_demo_data.php --confirm` as a one-off job using the service's environment.
+This operation truncates the shop's data tables and reseeds the demo users and products.

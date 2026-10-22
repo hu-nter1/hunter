@@ -18,23 +18,54 @@ $page_title = $product['name'] ?? 'Product';
 require __DIR__ . '/includes/header.php';
 ?>
 <?php if ($product): ?>
-<div class="card">
-  <?php if (!empty($product['image_url'])): ?>
-    <img class="product-detail-image" src="<?= htmlspecialchars($product['image_url']) ?>" alt="<?= htmlspecialchars($product['name']) ?>">
-  <?php endif; ?>
-  <h2><?= htmlspecialchars($product['name']) ?></h2>
-  <p><?= htmlspecialchars($product['description']) ?></p>
-  <p>Price: $<?= htmlspecialchars((float)$product['price']) ?></p>
-  <?php if (!$user || !$user['is_admin']): ?>
+<?php
+$productName = strtolower($product['name']);
+if (str_contains($productName, 'mouse')) {
+    $placeholderIcon = '⌁';
+} elseif (str_contains($productName, 'keyboard')) {
+    $placeholderIcon = '⌨';
+} elseif (str_contains($productName, 'hub')) {
+    $placeholderIcon = '◇';
+} elseif (str_contains($productName, 'webcam') || str_contains($productName, 'camera')) {
+    $placeholderIcon = '◉';
+} elseif (str_contains($productName, 'stand')) {
+    $placeholderIcon = '⌃';
+} else {
+    $placeholderIcon = '✦';
+}
+?>
+<section class="card product-detail-layout">
+  <div class="product-image-frame<?= empty($product['image_url']) ? ' product-placeholder' : '' ?>">
+    <?php if (!empty($product['image_url'])): ?>
+      <img src="<?= htmlspecialchars($product['image_url']) ?>" alt="<?= htmlspecialchars($product['name']) ?>">
+    <?php else: ?>
+      <span class="placeholder-icon" aria-hidden="true"><?= htmlspecialchars($placeholderIcon) ?></span>
+      <span class="placeholder-caption" aria-hidden="true">ShopEase essentials</span>
+    <?php endif; ?>
+  </div>
+  <div class="product-detail-copy">
+    <div class="detail-kicker">ShopEase collection</div>
+    <h1><?= htmlspecialchars($product['name']) ?></h1>
+    <p class="detail-description"><?= htmlspecialchars($product['description']) ?></p>
+    <div class="price">$<?= number_format((float)$product['price'], 2) ?></div>
+    <?php if (!$user || !$user['is_admin']): ?>
       <form method="POST" action="/cart.php?action=add&id=<?= (int)$id ?>">
-        <input type="number" name="quantity" value="1" min="1">
-        <button type="submit">Add to Cart</button>
+        <label for="quantity">Quantity</label>
+        <input id="quantity" type="number" name="quantity" value="1" min="1" aria-label="Quantity">
+        <button type="submit">Add to cart&nbsp; →</button>
       </form>
-  <?php else: ?>
-      <p><em>Admins cannot make purchases.</em></p>
-  <?php endif; ?>
-</div>
+      <p class="muted">Your selection will be ready to review at checkout.</p>
+    <?php else: ?>
+      <p class="muted"><em>Admins cannot make purchases.</em></p>
+    <?php endif; ?>
+    <p><a class="button-link" href="/products.php">←&nbsp; Back to the collection</a></p>
+  </div>
+</section>
 <?php else: ?>
-  <p>Product not found.</p>
+  <div class="card">
+    <h1>Product not found</h1>
+    <p class="muted">This item may have moved. Browse the collection to find something else.</p>
+    <a class="button-link" href="/products.php">Browse products</a>
+  </div>
 <?php endif; ?>
 <?php require __DIR__ . '/includes/footer.php'; ?>
