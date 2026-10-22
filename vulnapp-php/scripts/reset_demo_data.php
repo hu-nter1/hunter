@@ -44,10 +44,17 @@ $tables = [
     'products',
 ];
 
+$phase = 'clearing existing shop records';
 try {
     $pdo->beginTransaction();
-    $pdo->exec('TRUNCATE TABLE ' . implode(', ', $tables) . ' RESTART IDENTITY CASCADE');
+    foreach ($tables as $table) {
+        $pdo->exec("DELETE FROM $table");
+    }
+
+    $phase = 'seeding demo users and products';
     seed_db();
+
+    $phase = 'recording reset completion';
     $markerInsert = $pdo->prepare('INSERT INTO app_metadata (metadata_key, metadata_value) VALUES (?, ?)');
     $markerInsert->execute([$resetMarker, gmdate('c')]);
     $pdo->commit();
@@ -61,6 +68,6 @@ try {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    fwrite(STDERR, 'Neon demo data reset failed: ' . $exception->getMessage() . PHP_EOL);
+    fwrite(STDERR, 'Neon demo data reset failed while ' . $phase . ': ' . $exception->getMessage() . PHP_EOL);
     exit(1);
 }
