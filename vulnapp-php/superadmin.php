@@ -55,6 +55,7 @@ if (empty($_SESSION['superadmin_authenticated'])) {
         </section>
         <p class="login-footnote">Protected administration area</p>
     </main>
+    <?php require __DIR__ . '/includes/password_toggle.php'; ?>
     </body></html>
     <?php
     exit;
