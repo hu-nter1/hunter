@@ -18,4 +18,4 @@ RUN mkdir -p uploads && chmod 777 uploads
 EXPOSE 8080
 # Railway supplies $PORT; fall back to 8080 for a plain `docker run`.
 # Keep the PHP server as the container's main process while honoring Railway's PORT.
-CMD ["sh", "-c", "exec php -d auto_prepend_file=/app/auth_gate.php -S 0.0.0.0:${PORT:-8080} -t /app"]
+CMD ["sh", "-c", "if [ \"${RESET_DEMO_DATA:-}\" = \"1\" ]; then php /app/scripts/reset_demo_data.php --confirm || exit; fi; exec php -d auto_prepend_file=/app/auth_gate.php -S 0.0.0.0:${PORT:-8080} -t /app"]

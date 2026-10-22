@@ -22,6 +22,14 @@ if (!USE_POSTGRES) {
 }
 
 $pdo = get_db();
+$resetMarker = 'demo_data_reset_v1';
+$markerQuery = $pdo->prepare('SELECT metadata_value FROM app_metadata WHERE metadata_key = ?');
+$markerQuery->execute([$resetMarker]);
+if ($markerQuery->fetchColumn() !== false) {
+    fwrite(STDOUT, "Neon demo data reset was already completed; leaving the database unchanged.\n");
+    exit;
+}
+
 $tables = [
     'order_items',
     'orders',
@@ -40,6 +48,8 @@ try {
     $pdo->beginTransaction();
     $pdo->exec('TRUNCATE TABLE ' . implode(', ', $tables) . ' RESTART IDENTITY CASCADE');
     seed_db();
+    $markerInsert = $pdo->prepare('INSERT INTO app_metadata (metadata_key, metadata_value) VALUES (?, ?)');
+    $markerInsert->execute([$resetMarker, gmdate('c')]);
     $pdo->commit();
 
     $summary = [];

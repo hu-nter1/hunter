@@ -197,6 +197,7 @@ function initialize_schema(PDO $pdo) {
     foreach ($tables as $table => $definition) {
         $pdo->exec("CREATE TABLE IF NOT EXISTS $table $definition");
     }
+    $pdo->exec('CREATE TABLE IF NOT EXISTS app_metadata (metadata_key TEXT PRIMARY KEY, metadata_value TEXT)');
 
     $columns = [
         'users' => [

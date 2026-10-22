@@ -71,6 +71,8 @@ service, using a Neon PostgreSQL URL with SSL (`sslmode=require`). When Neon is 
 creates its schema and seeds the demo accounts and product catalog. Product uploads remain in
 `uploads/` and need separate durable file storage to survive redeploys.
 
-If replacing existing database contents is intended, run
-`php scripts/reset_demo_data.php --confirm` as a one-off job using the service's environment.
-This operation truncates the shop's data tables and reseeds the demo users and products.
+If replacing existing Neon contents is intended, add `RESET_DEMO_DATA=1` to the Render service
+environment and redeploy. Startup truncates the shop's data tables and reseeds the demo accounts
+and products once; a Neon marker prevents future restarts from repeating the reset. Remove the
+flag after confirming the reset. The guarded script can also be run directly as
+`php scripts/reset_demo_data.php --confirm` where one-off jobs are available.
