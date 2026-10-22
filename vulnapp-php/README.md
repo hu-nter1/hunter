@@ -18,6 +18,9 @@ product cards preserve image aspect ratios and fit images within each card.
 The current code does not implement every vulnerability named by its configuration switches.
 See [VULNERABILITIES.md](VULNERABILITIES.md) for the source-verified inventory, limitations,
 and flag storage/submission workflow. Use only an isolated local instance with synthetic data.
+For developers diagnosing failures or preparing updates, see the
+[Developer Operations Guide](docs/DEVELOPER-OPERATIONS-GUIDE.pdf) and its
+[editable HTML source](docs/DEVELOPER-OPERATIONS-GUIDE.html).
 
 The named challenge-flag catalog is initialized in the active SQLite or PostgreSQL/Neon
 database without resetting existing shop data. A signed-in learner can submit a discovered
