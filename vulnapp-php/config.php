@@ -199,7 +199,7 @@ function seed_vulnerability_flags(PDO $pdo) {
     $pdo->beginTransaction();
     try {
         if (USE_POSTGRES) {
-            $pdo->exec('LOCK TABLE flags IN EXCLUSIVE MODE');
+            $pdo->query('SELECT pg_advisory_xact_lock(741902381)')->fetchColumn();
         }
 
         $marker->execute([$markerKey]);
@@ -237,7 +237,7 @@ function seed_vulnerability_flags(PDO $pdo) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        throw $exception;
+        error_log('Vulnerability flag catalog initialization failed: ' . $exception->getMessage());
     }
 }
 
