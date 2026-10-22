@@ -54,10 +54,12 @@ try {
             $errorInfo = $pdo->errorInfo();
             throw new RuntimeException('Delete failed: ' . implode(' | ', array_filter($errorInfo)));
         }
+        $pdo->query('SELECT 1')->fetchColumn();
     }
 
-    $phase = 'seeding demo users and products';
-    seed_db();
+    seed_db(static function ($nextPhase) use (&$phase) {
+        $phase = $nextPhase;
+    });
 
     $phase = 'recording reset completion';
     $markerInsert = $pdo->prepare('INSERT INTO app_metadata (metadata_key, metadata_value) VALUES (?, ?)');

@@ -238,9 +238,15 @@ function initialize_schema(PDO $pdo) {
     }
 }
 
-function seed_db() {
+function seed_db($onPhaseChange = null) {
     $pdo = get_db();
+    if ($onPhaseChange !== null) {
+        $onPhaseChange('checking demo users');
+    }
     if ((int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn() === 0) {
+        if ($onPhaseChange !== null) {
+            $onPhaseChange('seeding demo users');
+        }
         $result = $pdo->exec("INSERT INTO users (username, password, email, is_admin, ssn) VALUES
         ('alice','alice123','alice@example.com',0,'123-45-6789'),
         ('bob','bobpass','bob@example.com',0,'987-65-4321'),
@@ -250,7 +256,13 @@ function seed_db() {
         }
     }
 
+    if ($onPhaseChange !== null) {
+        $onPhaseChange('checking demo products');
+    }
     if ((int)$pdo->query("SELECT COUNT(*) FROM products")->fetchColumn() === 0) {
+        if ($onPhaseChange !== null) {
+            $onPhaseChange('seeding demo products');
+        }
         $result = $pdo->exec("INSERT INTO products (name, description, price, image_url) VALUES
         ('Wireless Mouse','Ergonomic 2.4GHz wireless mouse',19.99,'https://images.unsplash.com/photo-1527814050087-3793815479db?auto=format&fit=crop&w=800&q=80'),
         ('Mechanical Keyboard','RGB backlit mechanical keyboard',59.99,'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=800&q=80'),
