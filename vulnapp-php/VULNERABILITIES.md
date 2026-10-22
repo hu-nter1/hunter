@@ -27,18 +27,18 @@ therefore been removed rather than presented as working instructions.
 | High | Admin access and include | A URL-path quirk skips the admin check; the admin page also includes a page path derived from request input without an allowlist. The exact path behavior depends on the web server. | `admin.php` |
 | High | Order IDOR / privacy disclosure | Order lookup can be based only on an order ID, returning customer email, shipping address, items, total, and status without verifying ownership. | `order_success.php` |
 | High | Receipt path traversal | A caller-supplied filename is appended to `uploads/` and read without checking that the resolved path stays inside that directory. | `download_receipt.php` |
-| High | Diagnostic disclosure | The debug page exposes `phpinfo()` and verbose errors are enabled. The Docker startup applies Basic Auth, but deployment configuration must continue to protect the lab. | `debug.php`, `config.php`, `Dockerfile` |
+| High | Diagnostic disclosure | The debug page exposes `phpinfo()` and verbose errors are enabled. The Docker startup applies a deployment access gate, but deployment configuration must continue to protect the lab. | `debug.php`, `config.php`, `Dockerfile` |
 | Medium | Profile-edit IDOR | The edit handler skips its ownership check when `VULN_IDOR_PROFILE_EDIT` is true, and updates the requested account's balance. Reachability depends on the surrounding admin-page routing. | `pages/edit_user.php`, `admin.php` |
 | Medium | SSRF / local resource fetch | The admin image-fetch handler passes the submitted URL to `file_get_contents()` without destination restrictions. | `pages/fetch_remote_image.php` |
 | Medium | Plaintext passwords and session fixation | Registration and demo seeding store plaintext passwords; successful login does not rotate the session ID under the current configuration. | `register.php`, `config.php`, `login.php` |
 | Medium | CSRF and unsafe state-changing requests | State changes lack CSRF tokens. Order approval and cart removal use GET requests. | `pages/orders.php`, `cart.php`, `checkout.php` |
 | Low | Missing upper quantity bound | The legacy quantity-update module has no upper-bound check when the integer-overflow toggle is on. The main cart flow enforces a lower bound of one, but no upper limit. | `pages/update_cart_quantity.php`, `cart.php` |
 | Low | Missing browser security headers | The shared header omits common security headers with `VULN_MISSING_HEADERS` enabled. | `includes/header.php` |
-| Low | Backup file in document root | `config.php.bak` is present in the web root. Whether it can be fetched depends on the web server and Basic Auth gate; treat it as sensitive and remove it from deploy artifacts. | `config.php.bak`, `Dockerfile` |
+| Low | Backup file in document root | `config.php.bak` is present in the web root. Whether it can be fetched depends on the web server and deployment access gate; treat it as sensitive and remove it from deploy artifacts. | `config.php.bak`, `Dockerfile` |
 
 Severity indicates the potential impact in a lab context, not whether the behavior is reachable
-from the public Internet. The Docker Basic Auth gate is part of the deployment boundary; keep
-it enabled and do not treat these intentionally vulnerable pages as production-ready.
+from the public Internet. The Docker deployment access gate is part of the deployment boundary;
+keep it enabled and do not treat these intentionally vulnerable pages as production-ready.
 
 ## Toggle inventory
 
@@ -161,7 +161,7 @@ existing shop and achievement rows are not reset.
 ## Safe ways to use this guide
 
 - Run the lab only on localhost or an isolated disposable environment, with synthetic records.
-- The PHP app requires the deployment Basic Auth variables and a `SUPERADMIN_KEY`; keep the
+- The PHP app requires the deployment access-gate variables and a `SUPERADMIN_KEY`; keep the
   Render instance protected and do not use it for exercises.
 - Start with the confirmed issues above. A configured toggle that is not mapped to code is not
   a working challenge.

@@ -75,9 +75,10 @@ Delete `vulnapp.db` any time to reset to the seeded demo data.
 
 ## Deploying to Render
 This is a single PHP service. The included Dockerfile installs PDO support for SQLite and
-PostgreSQL and enables the HTTP Basic Auth gate. Configure `LAB_AUTH_USER`, `LAB_AUTH_PASS`,
-and `SUPERADMIN_KEY` in the Render service environment before exposing the intentionally
-vulnerable lab.
+PostgreSQL and enables the ShopEase-branded access sign-in page. Configure `LAB_AUTH_USER`,
+`LAB_AUTH_PASS`, and `SUPERADMIN_KEY` in the Render service environment before exposing the
+intentionally vulnerable lab. The access gate remains enabled; the sign-in session is kept in
+the browser so the access prompt does not repeat while the session is active.
 
 For durable relational data, set `DATABASE_URL` as a secret environment variable in the Render
 service, using a Neon PostgreSQL URL with SSL (`sslmode=require`). When Neon is empty, the app

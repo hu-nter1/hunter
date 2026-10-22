@@ -58,7 +58,7 @@
   <p>When a page fails, first distinguish an access-gate response from an application or database failure. Do not begin by changing credentials, resetting data, or deploying a speculative fix.</p>
   <table>
     <tr><th>What you see</th><th>Likely meaning</th><th>Next safe check</th></tr>
-    <tr><td><code>401 Access denied</code></td><td>The HTTP Basic Auth gate is active. This is expected for an unauthenticated request; it does not prove the protected PHP route works.</td><td>Use the authorized lab gate credentials. Never remove the gate to “fix” the response.</td></tr>
+    <tr><td>ShopEase lab sign-in page</td><td>The deployment access gate is active and the browser has not authenticated this session.</td><td>Sign in with the authorized lab gate credentials. Never remove the gate to “fix” an access response.</td></tr>
     <tr><td><code>500</code>, PHP fatal, SQLSTATE</td><td>Application startup, route logic, or database schema/query failed.</td><td>Record the exact time, route, deployment commit, and sanitized error. Check Render logs and reproduce locally.</td></tr>
     <tr><td><code>404</code></td><td>Wrong route, missing file, or intentionally missing resource.</td><td>Verify the URL and file path/case; check whether the record exists in the active database.</td></tr>
     <tr><td>Page loads but data is missing</td><td>Wrong database/environment, incomplete schema migration, or no matching records.</td><td>Verify whether this process is using SQLite or PostgreSQL without printing secrets. Inspect schema and row counts read-only.</td></tr>
@@ -80,11 +80,11 @@
 
 <section class="page">
   <h2>2 · Architecture and source map</h2>
-  <p>This is a small server-rendered PHP application without a framework. Most requests load <code>config.php</code>, which chooses the database, initializes/updates schema, and seeds demo data. In Docker, <code>auth_gate.php</code> is configured as PHP’s <code>auto_prepend_file</code>, so the Basic Auth check runs before application pages.</p>
+  <p>This is a small server-rendered PHP application without a framework. Most requests load <code>config.php</code>, which chooses the database, initializes/updates schema, and seeds demo data. In Docker, <code>auth_gate.php</code> is configured as PHP’s <code>auto_prepend_file</code>, so the session-based access check runs before application pages and presents a branded sign-in page when needed.</p>
   <table>
     <tr><th>Path</th><th>Responsibility</th></tr>
     <tr><td><code>config.php</code></td><td>Vulnerability switches, session setup, database selection/connection, additive schema initialization, demo seed data, challenge-flag catalog, shared helpers.</td></tr>
-    <tr><td><code>auth_gate.php</code></td><td>Deployment HTTP Basic Auth using <code>LAB_AUTH_USER</code> and <code>LAB_AUTH_PASS</code>.</td></tr>
+    <tr><td><code>auth_gate.php</code></td><td>Deployment access sign-in using <code>LAB_AUTH_USER</code> and <code>LAB_AUTH_PASS</code>, protected by a session cookie and CSRF token.</td></tr>
     <tr><td><code>login.php</code>, <code>register.php</code></td><td>Demo/student authentication and registration. Registration includes the email used for achievement attribution.</td></tr>
     <tr><td><code>products.php</code>, <code>api/search.php</code>, <code>product.php</code></td><td>Storefront, search response, product detail and cart entry.</td></tr>
     <tr><td><code>cart.php</code>, <code>checkout.php</code>, <code>order_success.php</code></td><td>Session cart, order confirmation, persisted order display.</td></tr>
@@ -161,7 +161,7 @@ git status --short</pre>
 <section class="page">
   <h2>5 · Render operation and safe deployment</h2>
   <h3>Deployment boundary</h3>
-  <p>The Render service is named <code>vulnapp-php</code> and builds the PHP Docker image. The Docker command starts PHP’s built-in web server and prepends <code>auth_gate.php</code>. Keep these Render variables configured as secrets: <code>LAB_AUTH_USER</code>, <code>LAB_AUTH_PASS</code>, <code>SUPERADMIN_KEY</code>, and <code>DATABASE_URL</code>. Never place secret values in <code>render.yaml</code>, commits, or this guide.</p>
+  <p>The Render service is named <code>vulnapp-php</code> and builds the PHP Docker image. The Docker command starts PHP’s built-in web server and prepends <code>auth_gate.php</code>. Keep these Render variables configured as secrets: <code>LAB_AUTH_USER</code>, <code>LAB_AUTH_PASS</code>, <code>SUPERADMIN_KEY</code>, and <code>DATABASE_URL</code>. The access gate now shows a ShopEase sign-in page and keeps a session after successful authentication; do not remove the gate. Never place secret values in <code>render.yaml</code>, commits, or this guide.</p>
   <p>The locally configured Git remote is the source connected to the deployment. Check <code>git remote -v</code> and Render’s service settings before publishing; workspace display names are not necessarily GitHub repository names.</p>
   <h3>Release checklist</h3>
   <ol>
@@ -185,7 +185,7 @@ render deploys create SERVICE_ID --commit COMMIT_SHA --wait --confirm --output j
   <p>Use the actual service ID from the Render dashboard/CLI; do not assume it from an old session. Restarting is not a substitute for fixing a failing migration. Keep Neon records intact during deploys.</p>
   <h3>Rollback</h3>
   <p>If the new release causes an outage, identify the last known-good deployment in Render. Roll back to that deployment or redeploy the previous known-good commit. A code rollback does not undo database changes; keep migrations additive and backward-compatible, and handle database rollback separately with a backup and review.</p>
-  <div class="note">A rollback, redeploy, or restart should not print or alter database credentials, reset Neon, or expose the intentionally vulnerable service by removing Basic Auth.</div>
+  <div class="note">A rollback, redeploy, or restart should not print or alter database credentials, reset Neon, or expose the intentionally vulnerable service by removing the access gate.</div>
 </section>
 <p style="page-break-before:always;break-before:page;margin:0;">&nbsp;</p>
 
