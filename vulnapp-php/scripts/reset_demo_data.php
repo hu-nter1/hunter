@@ -50,7 +50,10 @@ try {
     $pdo->beginTransaction();
     foreach ($tables as $table) {
         $phase = "clearing $table";
-        $pdo->exec("DELETE FROM $table");
+        if ($pdo->exec("DELETE FROM $table") === false) {
+            $errorInfo = $pdo->errorInfo();
+            throw new RuntimeException('Delete failed: ' . implode(' | ', array_filter($errorInfo)));
+        }
     }
 
     $phase = 'seeding demo users and products';
