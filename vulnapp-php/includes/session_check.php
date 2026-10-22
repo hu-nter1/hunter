@@ -23,7 +23,7 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember'])) {
 function current_user() {
     if (!isset($_SESSION['user_id'])) return null;
     $pdo = get_db();
-    $stmt = $pdo->prepare("SELECT id, username, is_admin, balance FROM users WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, username, email, is_admin, balance FROM users WHERE id = ?");
     $stmt->execute([$_SESSION['user_id']]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }

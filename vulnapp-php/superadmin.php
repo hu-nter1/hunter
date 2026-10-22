@@ -100,7 +100,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $users = $pdo->query("SELECT * FROM users ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 $products = $pdo->query("SELECT * FROM products ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
-$heroes = $pdo->query("SELECT h.*, u.email FROM hall_of_fame h JOIN users u ON h.username = u.username ORDER BY h.timestamp DESC")->fetchAll(PDO::FETCH_ASSOC);
+$heroes = $pdo->query(
+    "SELECT h.username, COALESCE(h.email, u.email, '') AS email, h.vuln_id,
+            COALESCE(f.vulnerability_name, h.vuln_id) AS vulnerability_name,
+            f.flag, h.timestamp
+     FROM hall_of_fame h
+     LEFT JOIN users u ON h.user_id = u.id OR (h.user_id IS NULL AND h.username = u.username)
+     LEFT JOIN flags f ON h.flag_id = f.id
+     ORDER BY h.timestamp DESC"
+)->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html><html><head><title>Superadmin</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -119,6 +127,7 @@ $heroes = $pdo->query("SELECT h.*, u.email FROM hall_of_fame h JOIN users u ON h
     .btn { padding:8px 11px; border:0; border-radius:8px; cursor:pointer; color:white; background:#5364d8; font-weight:700; }
     .btn-red { background:#c94d55; }
     .product-create-form { margin-bottom:20px; padding:18px; border:1px solid #e3e7f0; border-radius:12px; background:#f2f4fa; }
+    .heroes-table { min-width:900px; }
     @media(max-width:700px) { body { padding:16px; } table { min-width:650px; } }
 </style></head><body>
 <h2>Superadmin Control Center</h2>
@@ -164,9 +173,18 @@ $heroes = $pdo->query("SELECT h.*, u.email FROM hall_of_fame h JOIN users u ON h
     <?php endforeach; ?></table>
 </div>
 <div class="card"><h3>Hall of Heroes</h3>
-    <table><tr><th>User</th><th>Email</th><th>Vuln</th><th>Time</th></tr>
+    <table class="heroes-table"><tr><th>Username</th><th>Email</th><th>Flag</th><th>Vulnerability Type</th><th>Found At (UTC)</th></tr>
+    <?php if (empty($heroes)): ?>
+    <tr><td colspan="5">No discoveries have been submitted yet.</td></tr>
+    <?php endif; ?>
     <?php foreach($heroes as $h): ?>
-    <tr><td><?= htmlspecialchars($h['username']) ?></td><td><?= htmlspecialchars($h['email'] ?? '') ?></td><td><?= htmlspecialchars($h['vuln_id']) ?></td><td><?= $h['timestamp'] ?></td></tr>
+    <tr>
+        <td><?= htmlspecialchars($h['username']) ?></td>
+        <td><?= htmlspecialchars($h['email']) ?></td>
+        <td><code><?= htmlspecialchars($h['flag'] ?? 'Legacy entry') ?></code></td>
+        <td><?= htmlspecialchars($h['vulnerability_name']) ?> (<?= htmlspecialchars($h['vuln_id']) ?>)</td>
+        <td><?= htmlspecialchars($h['timestamp']) ?></td>
+    </tr>
     <?php endforeach; ?></table>
 </div>
 </body></html>

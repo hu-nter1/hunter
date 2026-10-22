@@ -10,8 +10,14 @@ $profile = $stmt->fetch(PDO::FETCH_ASSOC);
 // Fetch user's exploited flags
 $flags = [];
 if ($profile) {
-    $stmt = get_db()->prepare("SELECT vuln_id FROM hall_of_fame WHERE username = ?");
-    $stmt->execute([$profile['username']]);
+    $stmt = get_db()->prepare(
+        "SELECT h.vuln_id, h.timestamp, COALESCE(f.vulnerability_name, h.vuln_id) AS vulnerability_name
+         FROM hall_of_fame h
+         LEFT JOIN flags f ON h.flag_id = f.id
+         WHERE h.user_id = ? OR (h.user_id IS NULL AND h.username = ?)
+         ORDER BY h.timestamp DESC"
+    );
+    $stmt->execute([$profile['id'], $profile['username']]);
     $flags = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
@@ -28,7 +34,7 @@ require __DIR__ . '/includes/header.php';
     <h3>Flags Earned</h3>
     <ul>
         <?php foreach ($flags as $f): ?>
-            <li><?= htmlspecialchars($f['vuln_id']) ?></li>
+            <li><?= htmlspecialchars($f['vulnerability_name']) ?> (<?= htmlspecialchars($f['vuln_id']) ?>) — <?= htmlspecialchars($f['timestamp']) ?></li>
         <?php endforeach; ?>
     </ul>
     

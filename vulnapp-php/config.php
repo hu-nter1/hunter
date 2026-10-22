@@ -144,6 +144,99 @@ function insert_and_get_id(PDO $pdo, $sql, array $params = []) {
     return $pdo->lastInsertId();
 }
 
+function vulnerability_flag_catalog() {
+    return [
+        ['VULN-001', 'SQL Injection in Product Search'],
+        ['VULN-002', 'IDOR on Order Viewing'],
+        ['VULN-003', 'Path Traversal in Admin Panel'],
+        ['VULN-004', 'SQL Injection in Login'],
+        ['VULN-005', 'Weak Password Hashing'],
+        ['VULN-006', 'No Login Rate Limiting'],
+        ['VULN-007', 'Predictable Session Tokens'],
+        ['VULN-008', 'Session Fixation'],
+        ['VULN-009', 'Username Enumeration'],
+        ['VULN-010', 'Error-Based SQL Injection'],
+        ['VULN-011', 'Blind Boolean SQL Injection'],
+        ['VULN-012', 'Blind Time-Based SQL Injection'],
+        ['VULN-013', 'Second-Order SQL Injection'],
+        ['VULN-014', 'Header-Based SQL Injection'],
+        ['VULN-015', 'Reflected Cross-Site Scripting'],
+        ['VULN-016', 'Stored Cross-Site Scripting'],
+        ['VULN-017', 'Stored Cross-Site Scripting Filter Bypass'],
+        ['VULN-018', 'Cross-Site Scripting via Attribute Injection'],
+        ['VULN-019', 'DOM-Based Cross-Site Scripting'],
+        ['VULN-020', 'Insecure Use of eval'],
+        ['VULN-021', 'Broken Access Control'],
+        ['VULN-022', 'IDOR on Profile Editing'],
+        ['VULN-023', 'Horizontal Privilege Escalation'],
+        ['VULN-024', 'Insecure Remember-Me Cookie'],
+        ['VULN-025', 'HTTP Method Tampering'],
+        ['VULN-026', 'URL Quirk Access-Control Bypass'],
+        ['VULN-027', 'Price and Quantity Tampering'],
+        ['VULN-028', 'Mass Assignment at Checkout'],
+        ['VULN-029', 'Integer Overflow in Cart Quantity'],
+        ['VULN-030', 'Unrestricted File Upload'],
+        ['VULN-031', 'Path Traversal in Receipt Download'],
+        ['VULN-032', 'Server-Side Request Forgery'],
+        ['VULN-033', 'XML External Entity Injection'],
+        ['VULN-034', 'Verbose Error Exposure'],
+        ['VULN-035', 'Exposed Backup Files'],
+        ['VULN-036', 'Debug Endpoint Information Disclosure'],
+        ['VULN-037', 'Missing Security Headers'],
+        ['VULN-024', 'Vertical Privilege Escalation'],
+        ['VULN-031', 'SQL Comment Filter Bypass'],
+    ];
+}
+
+function seed_vulnerability_flags(PDO $pdo) {
+    $markerKey = 'vulnerability_flag_catalog_v1';
+    $marker = $pdo->prepare('SELECT metadata_value FROM app_metadata WHERE metadata_key = ?');
+    $marker->execute([$markerKey]);
+    if ($marker->fetchColumn() !== false) {
+        return;
+    }
+
+    $pdo->beginTransaction();
+    try {
+        if (USE_POSTGRES) {
+            $pdo->exec('LOCK TABLE flags IN EXCLUSIVE MODE');
+        }
+
+        $marker->execute([$markerKey]);
+        if ($marker->fetchColumn() !== false) {
+            $pdo->commit();
+            return;
+        }
+
+        $inserted = 0;
+        $find = $pdo->prepare('SELECT id FROM flags WHERE vulnerability_name = ?');
+        $insert = $pdo->prepare('INSERT INTO flags (vuln_id, vulnerability_name, flag) VALUES (?, ?, ?)');
+        foreach (vulnerability_flag_catalog() as [$vulnerabilityId, $vulnerabilityName]) {
+            $find->execute([$vulnerabilityName]);
+            if ($find->fetchColumn() !== false) {
+                continue;
+            }
+
+            $flag = 'FLAG{' . strtoupper(bin2hex(random_bytes(16))) . '}';
+            $insert->execute([$vulnerabilityId, $vulnerabilityName, $flag]);
+            $inserted++;
+        }
+
+        $recordMarker = $pdo->prepare('INSERT INTO app_metadata (metadata_key, metadata_value) VALUES (?, ?)');
+        $recordMarker->execute([$markerKey, gmdate('c')]);
+        $pdo->commit();
+
+        if ($inserted > 0) {
+            error_log("Seeded $inserted missing vulnerability flags into the active database.");
+        }
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
+    }
+}
+
 function save_product_image_upload($field = 'product_image') {
     if (!isset($_FILES[$field]) || $_FILES[$field]['error'] === UPLOAD_ERR_NO_FILE) {
         return null;
@@ -190,8 +283,8 @@ function initialize_schema(PDO $pdo) {
         'reviews' => "(id $autoId, product_id INTEGER, user_id INTEGER, comment TEXT)",
         'access_logs' => "(id $autoId, ua TEXT)",
         'remember_tokens' => '(id INTEGER PRIMARY KEY, user_id INTEGER, token TEXT)',
-        'flags' => '(id INTEGER PRIMARY KEY, vuln_id TEXT, flag TEXT)',
-        'hall_of_fame' => "(id $autoId, username TEXT, vuln_id TEXT, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
+        'flags' => "(id $autoId, vuln_id TEXT, flag TEXT)",
+        'hall_of_fame' => "(id $autoId, username TEXT, email TEXT, user_id INTEGER, vuln_id TEXT, flag_id INTEGER, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
         'activity_logs' => "(id $autoId, username TEXT, action TEXT, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
     ];
     foreach ($tables as $table => $definition) {
@@ -212,7 +305,13 @@ function initialize_schema(PDO $pdo) {
             'status' => "TEXT DEFAULT 'pending'",
             'created_at' => USE_POSTGRES ? 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' : 'DATETIME',
         ],
-        'hall_of_fame' => ['timestamp' => USE_POSTGRES ? 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' : 'DATETIME'],
+        'flags' => ['vulnerability_name' => 'TEXT'],
+        'hall_of_fame' => [
+            'timestamp' => USE_POSTGRES ? 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' : 'DATETIME',
+            'email' => 'TEXT',
+            'user_id' => 'INTEGER',
+            'flag_id' => 'INTEGER',
+        ],
         'activity_logs' => ['timestamp' => USE_POSTGRES ? 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' : 'DATETIME'],
     ];
 
@@ -230,6 +329,9 @@ function initialize_schema(PDO $pdo) {
             }
         }
     }
+
+    $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS flags_vulnerability_name_unique ON flags (vulnerability_name)');
+    seed_vulnerability_flags($pdo);
 
     if (!USE_POSTGRES) {
         $pdo->exec("CREATE TRIGGER IF NOT EXISTS orders_created_at_default AFTER INSERT ON orders WHEN NEW.created_at IS NULL BEGIN UPDATE orders SET created_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
