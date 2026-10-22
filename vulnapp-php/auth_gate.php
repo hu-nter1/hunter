@@ -1,4 +1,9 @@
 <?php
+ini_set('display_errors', '0');
+ini_set('display_startup_errors', '0');
+ini_set('log_errors', '1');
+error_reporting(E_ALL);
+
 $validUser = getenv('LAB_AUTH_USER');
 $validPass = getenv('LAB_AUTH_PASS');
 

@@ -11,7 +11,7 @@ if (empty($_SESSION['superadmin_authenticated'])) {
         $submittedKey = (string)($_POST['superadmin_key'] ?? '');
         if (!hash_equals($superadminKey, $submittedKey)) {
             http_response_code(403);
-            $loginError = 'Invalid admin key.';
+            $loginError = 'Invalid pass key.';
         } else {
             session_regenerate_id(true);
             $_SESSION['superadmin_authenticated'] = true;
@@ -45,10 +45,10 @@ if (empty($_SESSION['superadmin_authenticated'])) {
         <section class="login-card" aria-labelledby="login-title">
             <div class="login-icon" aria-hidden="true">⌑</div>
             <h1 id="login-title">Superadmin sign in</h1>
-            <p class="login-subtitle">Enter your administrator key to open the ShopEase control center.</p>
-            <?php if ($loginError): ?><p class="login-error" role="alert"><?= htmlspecialchars($loginError) ?></p><?php endif; ?>
+            <p class="login-subtitle">Enter your pass key to open the ShopEase control center.</p>
+            <?php if ($loginError): ?><p class="login-error" role="alert"><?= htmlspecialchars($loginError, ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
             <form method="POST">
-                <label for="superadmin-key">Superadmin key</label>
+                <label for="superadmin-key">Pass key</label>
                 <input id="superadmin-key" type="password" name="superadmin_key" autocomplete="current-password" required>
                 <button type="submit">Continue to control center&nbsp; →</button>
             </form>

@@ -43,7 +43,7 @@ define('VULN_COOKIE_DEBUG_MODE', true);
 define('VULN_AUTOCOMPLETE_ENABLED', true);
 define('VULN_MISSING_CACHE_CONTROL', true);
 define('VULN_VERBOSE_API_JSON', true);
-define('VULN_VERBOSE_ERRORS', true);
+define('VULN_VERBOSE_ERRORS', false);
 define('VULN_EXPOSED_BACKUPS', true);
 define('VULN_HARDCODED_CREDS', true);
 define('VULN_DEBUG_ENDPOINTS', true);
@@ -70,15 +70,13 @@ define('VULN_CASE_SENSITIVITY_BYPASS', true);
 define('VULN_TRAILING_DOT_SLASH', true);
 define('VULN_SQL_COMMENT_FILTER_BYPASS', true);
 
-session_start();
-
-if (VULN_VERBOSE_ERRORS) {
-    ini_set('display_errors', 1);
-    error_reporting(E_ALL);
-} else {
-    ini_set('display_errors', 0);
-    error_reporting(0);
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
 }
+ini_set('display_errors', '0');
+ini_set('display_startup_errors', '0');
+ini_set('log_errors', '1');
+error_reporting(E_ALL);
 
 $databaseUrl = getenv('DATABASE_URL');
 define('USE_POSTGRES', $databaseUrl !== false && $databaseUrl !== '');

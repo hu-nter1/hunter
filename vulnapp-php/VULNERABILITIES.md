@@ -27,7 +27,7 @@ therefore been removed rather than presented as working instructions.
 | High | Admin access and include | A URL-path quirk skips the admin check; the admin page also includes a page path derived from request input without an allowlist. The exact path behavior depends on the web server. | `admin.php` |
 | High | Order IDOR / privacy disclosure | Order lookup can be based only on an order ID, returning customer email, shipping address, items, total, and status without verifying ownership. | `order_success.php` |
 | High | Receipt path traversal | A caller-supplied filename is appended to `uploads/` and read without checking that the resolved path stays inside that directory. | `download_receipt.php` |
-| High | Diagnostic disclosure | The debug page exposes `phpinfo()` and verbose errors are enabled. The Docker startup applies a deployment access gate, but deployment configuration must continue to protect the lab. | `debug.php`, `config.php`, `Dockerfile` |
+| High | Diagnostic disclosure | The debug page exposes `phpinfo()`. PHP warnings and errors are logged server-side but not displayed in responses. The Docker startup applies a deployment access gate, which must continue to protect the lab. | `debug.php`, `config.php`, `Dockerfile` |
 | Medium | Profile-edit IDOR | The edit handler skips its ownership check when `VULN_IDOR_PROFILE_EDIT` is true, and updates the requested account's balance. Reachability depends on the surrounding admin-page routing. | `pages/edit_user.php`, `admin.php` |
 | Medium | SSRF / local resource fetch | The admin image-fetch handler passes the submitted URL to `file_get_contents()` without destination restrictions. | `pages/fetch_remote_image.php` |
 | Medium | Plaintext passwords and session fixation | Registration and demo seeding store plaintext passwords; successful login does not rotate the session ID under the current configuration. | `register.php`, `config.php`, `login.php` |
@@ -93,11 +93,12 @@ constant is `true`; it does **not** confirm an implemented or reachable challeng
 
 - Enabled: `VULN_UNRESTRICTED_FILE_UPLOAD`, `VULN_PATH_TRAVERSAL_DOWNLOAD`, `VULN_SSRF`,
   `VULN_EXPOSED_SOURCE_MAP`, `VULN_COOKIE_DEBUG_MODE`, `VULN_AUTOCOMPLETE_ENABLED`,
-  `VULN_MISSING_CACHE_CONTROL`, `VULN_VERBOSE_API_JSON`, `VULN_VERBOSE_ERRORS`,
+  `VULN_MISSING_CACHE_CONTROL`, `VULN_VERBOSE_API_JSON`,
   `VULN_EXPOSED_BACKUPS`, `VULN_HARDCODED_CREDS`, `VULN_DEBUG_ENDPOINTS`,
   `VULN_MISSING_HEADERS`.
-- Confirmed: receipt path traversal, SSRF handler, debug/config disclosure, verbose errors,
+- Confirmed: receipt path traversal, SSRF handler, debug/config disclosure,
   missing security headers, and the presence of a backup file.
+- PHP warnings and errors are logged server-side and are not rendered into browser responses.
 - Not confirmed as an unrestricted upload: the product image helper validates image content,
   permits a small image MIME allowlist, and generates a new filename.
 - Source maps, cookie debug mode, autocomplete, verbose API JSON, and hardcoded-credential
@@ -105,7 +106,8 @@ constant is `true`; it does **not** confirm an implemented or reachable challeng
 
 ### Remaining configured toggles
 
-- Enabled: `VULN_ROUNDING_ERROR` (listed above), `VULN_COMMAND_INJECTION` (**disabled**).
+- Enabled: `VULN_ROUNDING_ERROR` (listed above).
+- Disabled: `VULN_COMMAND_INJECTION`, `VULN_VERBOSE_ERRORS`.
 - No current application behavior was confirmed for command injection; do not enable it or
   interpret its name as an implemented challenge.
 - `VULN_XXE_IMPORT`, `VULN_PARAMETER_POLLUTION`, `VULN_COUPON_STACKING`, and `VULN_REDOS` are

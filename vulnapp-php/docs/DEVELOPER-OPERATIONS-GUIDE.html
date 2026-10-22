@@ -75,6 +75,7 @@
   <div class="note"><strong>Useful rule:</strong> a successful build or a <code>401</code> from the public URL is not an authenticated smoke test. Verify deployment status separately from application behavior.</div>
   <h3>Do not expose secrets while diagnosing</h3>
   <p>Never paste <code>DATABASE_URL</code>, Render environment dumps, HTTP authorization headers, cookies, superadmin keys, student passwords, or database flag values into issues, logs, screenshots, or chat. Share only the error and sanitized context needed to reproduce it.</p>
+  <p>PHP warnings and errors are logged by the server and are not displayed in page responses. Diagnose them through authorized, access-controlled server logs; do not turn browser error display on to troubleshoot a deployment.</p>
 </section>
 <p style="page-break-before:always;break-before:page;margin:0;">&nbsp;</p>
 
@@ -89,7 +90,7 @@
     <tr><td><code>products.php</code>, <code>api/search.php</code>, <code>product.php</code></td><td>Storefront, search response, product detail and cart entry.</td></tr>
     <tr><td><code>cart.php</code>, <code>checkout.php</code>, <code>order_success.php</code></td><td>Session cart, order confirmation, persisted order display.</td></tr>
     <tr><td><code>admin.php</code>, <code>pages/</code></td><td>Admin route and included modules for users, products, orders, and Hall of Heroes.</td></tr>
-    <tr><td><code>superadmin.php</code></td><td>Separate key-protected control panel and Hall of Heroes summary.</td></tr>
+    <tr><td><code>superadmin.php</code></td><td>Separate pass-key-protected control panel and Hall of Heroes summary.</td></tr>
     <tr><td><code>submit_flag.php</code>, <code>generate_cert.php</code>, <code>includes/certificate_pdf.php</code></td><td>Flag submission, earned-challenge certificate authorization, dependency-free PDF generation.</td></tr>
     <tr><td><code>scripts/reset_demo_data.php</code></td><td>Explicit, destructive PostgreSQL demo-data reset utility. Not part of normal startup.</td></tr>
     <tr><td><code>Dockerfile</code>, <code>render.yaml</code></td><td>PHP runtime/extensions, access-gate startup, and Render environment-variable declarations.</td></tr>
