@@ -30,7 +30,7 @@ To intentionally replace **all** shop records in a PostgreSQL database with the 
 ```bash
 php scripts/reset_demo_data.php --confirm
 ```
-This truncates the users, products, orders, comments, reviews, flags, and activity tables before reseeding. It refuses to run from a web request or against SQLite. Only use it when replacing the existing data is intended.
+This deletes the users, products, orders, comments, reviews, flags, and activity records before reseeding. It refuses to run from a web request or against SQLite. Only use it when replacing the existing data is intended.
 
 Demo logins: `alice/alice123`, `bob/bobpass`, `admin/admin!2024`
 
@@ -71,8 +71,6 @@ service, using a Neon PostgreSQL URL with SSL (`sslmode=require`). When Neon is 
 creates its schema and seeds the demo accounts and product catalog. Product uploads remain in
 `uploads/` and need separate durable file storage to survive redeploys.
 
-If replacing existing Neon contents is intended, add `RESET_DEMO_DATA=1` to the Render service
-environment and redeploy. Startup truncates the shop's data tables and reseeds the demo accounts
-and products once; a Neon marker prevents future restarts from repeating the reset. Remove the
-flag after confirming the reset. The guarded script can also be run directly as
-`php scripts/reset_demo_data.php --confirm` where one-off jobs are available.
+Render startup does not reset or delete existing Neon data. To intentionally replace it, run the
+guarded `php scripts/reset_demo_data.php --confirm` command from an authorized one-off job or
+shell session. Do not enable a startup reset for a persistent production database.
