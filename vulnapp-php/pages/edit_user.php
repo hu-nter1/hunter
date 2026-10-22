@@ -4,6 +4,7 @@ $pdo = get_db();
 
 $id = (int)($_GET['id'] ?? 0);
 $current_user = current_user();
+$success = false;
 
 // VULNERABLE: IDOR on profile edit (can edit anyone if ID is known)
 if (!VULN_IDOR_PROFILE_EDIT && $current_user['id'] != $id && !$current_user['is_admin']) {
@@ -23,8 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $pdo->prepare("UPDATE users SET balance = ? WHERE id = ?");
         $stmt->execute([$balance, $id]);
     }
-    header('Location: /admin.php?page=users.php');
-    exit;
+    $success = true;
 }
 
 $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
@@ -32,6 +32,7 @@ $stmt->execute([$id]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 ?>
 <h3>Edit User: <?= htmlspecialchars($user['username']) ?></h3>
+<?php if ($success): ?><p role="status">User updated.</p><?php endif; ?>
 <form method="POST" action="/admin.php?page=edit_user.php&id=<?= (int)$id ?>">
     <label>Balance</label>
     <input type="number" step="0.01" name="balance" value="<?= (float)$user['balance'] ?>" required>

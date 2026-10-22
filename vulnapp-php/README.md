@@ -10,7 +10,7 @@ A normal-looking 5-page shop built in plain PHP + PDO (no framework) as an inten
 3. `profile.php` — profile display and earned-flag history.
 4. `product.php` — product details and validated image display.
 5. `admin.php` — admin pages and product/user/order management.
-6. `register.php` — demo account registration.
+6. `register.php` — learner registration with an email address for achievement attribution.
 
 Admin product management accepts an image URL or a local JPG, PNG, GIF, or WebP upload. Storefront
 product cards preserve image aspect ratios and fit images within each card.
