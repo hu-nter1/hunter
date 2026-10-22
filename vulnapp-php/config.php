@@ -80,48 +80,91 @@ if (VULN_VERBOSE_ERRORS) {
     error_reporting(0);
 }
 
-// Update the DB path to point to the persistent disk mount
-define('DB_PATH', '/var/www/html/data/vulnapp.db');
-define('UPLOAD_DIR', '/var/www/html/data/uploads/');
+// Railway volumes can be mounted at /app/data; local runs use the app directory.
+$dataDir = getenv('APP_DATA_DIR') ?: __DIR__ . '/data';
+if (!is_dir($dataDir) && !mkdir($dataDir, 0775, true) && !is_dir($dataDir)) {
+    throw new RuntimeException('Unable to create the application data directory.');
+}
+define('DB_PATH', $dataDir . '/vulnapp.db');
+define('UPLOAD_DIR', __DIR__ . '/uploads/');
 
 function get_db() {
     static $pdo = null;
     if ($pdo === null) {
         $pdo = new PDO('sqlite:' . DB_PATH);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        initialize_schema($pdo);
     }
     return $pdo;
 }
 
+function initialize_schema(PDO $pdo) {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, password TEXT, email TEXT, is_admin INTEGER DEFAULT 0, ssn TEXT, balance REAL DEFAULT 0.0)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, description TEXT, price REAL, image_url TEXT)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, author TEXT, body TEXT)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, total REAL, shipping_address TEXT, status TEXT DEFAULT 'pending', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, product_id INTEGER, quantity INTEGER)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, user_id INTEGER, comment TEXT)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS access_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ua TEXT)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS remember_tokens (id INTEGER PRIMARY KEY, user_id INTEGER, token TEXT)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS flags (id INTEGER PRIMARY KEY, vuln_id TEXT, flag TEXT)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS hall_of_fame (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, vuln_id TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS activity_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, action TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
+
+    $columns = [
+        'users' => [
+            'email' => 'TEXT',
+            'is_admin' => 'INTEGER DEFAULT 0',
+            'ssn' => 'TEXT',
+            'balance' => 'REAL DEFAULT 0.0',
+        ],
+        'products' => ['image_url' => 'TEXT'],
+        'orders' => [
+            'shipping_address' => 'TEXT',
+            'status' => "TEXT DEFAULT 'pending'",
+            'created_at' => 'DATETIME',
+        ],
+        'hall_of_fame' => ['timestamp' => 'DATETIME'],
+        'activity_logs' => ['timestamp' => 'DATETIME'],
+    ];
+
+    foreach ($columns as $table => $definitions) {
+        $existingColumns = $pdo->query("PRAGMA table_info($table)")->fetchAll(PDO::FETCH_COLUMN, 1);
+        foreach ($definitions as $column => $definition) {
+            if (!in_array($column, $existingColumns, true)) {
+                $pdo->exec("ALTER TABLE $table ADD COLUMN $column $definition");
+            }
+        }
+    }
+
+    $pdo->exec("CREATE TRIGGER IF NOT EXISTS orders_created_at_default AFTER INSERT ON orders WHEN NEW.created_at IS NULL BEGIN UPDATE orders SET created_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
+    $pdo->exec("CREATE TRIGGER IF NOT EXISTS hall_of_fame_timestamp_default AFTER INSERT ON hall_of_fame WHEN NEW.timestamp IS NULL BEGIN UPDATE hall_of_fame SET timestamp = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
+    $pdo->exec("CREATE TRIGGER IF NOT EXISTS activity_logs_timestamp_default AFTER INSERT ON activity_logs WHEN NEW.timestamp IS NULL BEGIN UPDATE activity_logs SET timestamp = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
+}
+
 function seed_db() {
     $pdo = get_db();
-    $pdo->exec("DROP TABLE IF EXISTS users");
-    $pdo->exec("DROP TABLE IF EXISTS products");
-    $pdo->exec("DROP TABLE IF EXISTS comments");
-    $pdo->exec("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, password TEXT, email TEXT, is_admin INTEGER DEFAULT 0, ssn TEXT, balance REAL DEFAULT 0.0)");
-    $pdo->exec("CREATE TABLE products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, description TEXT, price REAL)");
-    $pdo->exec("CREATE TABLE comments (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, author TEXT, body TEXT)");
-    $pdo->exec("CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, total REAL, shipping_address TEXT, status TEXT DEFAULT 'pending', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
-    $pdo->exec("CREATE TABLE order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, product_id INTEGER, quantity INTEGER)");
-    $pdo->exec("CREATE TABLE reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER, user_id INTEGER, comment TEXT)");
-    $pdo->exec("CREATE TABLE access_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, ua TEXT)");
-    $pdo->exec("CREATE TABLE remember_tokens (id INTEGER PRIMARY KEY, user_id INTEGER, token TEXT)");
-
-    $pdo->exec("INSERT INTO users (username, password, email, is_admin, ssn) VALUES
+    if ((int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn() === 0) {
+        $pdo->exec("INSERT INTO users (username, password, email, is_admin, ssn) VALUES
         ('alice','alice123','alice@example.com',0,'123-45-6789'),
         ('bob','bobpass','bob@example.com',0,'987-65-4321'),
         ('admin','admin123','admin@example.com',1,'000-00-0000')");
+    }
 
-    $pdo->exec("INSERT INTO products (name, description, price) VALUES
+    if ((int)$pdo->query("SELECT COUNT(*) FROM products")->fetchColumn() === 0) {
+        $pdo->exec("INSERT INTO products (name, description, price) VALUES
         ('Wireless Mouse','Ergonomic 2.4GHz wireless mouse',19.99),
         ('Mechanical Keyboard','RGB backlit mechanical keyboard',59.99),
         ('USB-C Hub','7-in-1 USB-C hub with HDMI',29.99),
         ('Webcam 1080p','Full HD webcam with autofocus',34.99),
         ('Laptop Stand','Aluminum adjustable laptop stand',24.99)");
+    }
 }
 
 if (!file_exists(DB_PATH)) {
     seed_db();
+} else {
+    get_db();
 }
 
 class Logger {

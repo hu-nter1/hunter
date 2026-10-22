@@ -15,6 +15,10 @@ if (VULN_IDOR_ORDER_VIEW) {
     $stmt->execute([$id, $_SESSION['user_id']]);
 }
 $order = $stmt->fetch(PDO::FETCH_ASSOC);
+if (!$order) {
+    http_response_code(404);
+    exit('Order not found.');
+}
 
 $stmt = $pdo->prepare("SELECT p.name, p.price FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?");
 $stmt->execute([$id]);

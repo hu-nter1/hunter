@@ -8,6 +8,10 @@ if (!isset($_SESSION['cart']) || empty($_SESSION['cart'])) {
 }
 
 $user = current_user();
+if (!$user) {
+    header('Location: /login.php');
+    exit;
+}
 $pdo = get_db();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm'])) {
@@ -29,13 +33,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm'])) {
         die("Insufficient balance.");
     }
     
+    $pdo->beginTransaction();
     $pdo->prepare("UPDATE users SET balance = balance - ? WHERE id = ?")->execute([$total, $user['id']]);
-    
+
     $stmt = $pdo->prepare("INSERT INTO orders (user_id, total, shipping_address, status) VALUES (?, ?, ?, 'pending')");
     $stmt->execute([$user['id'], $total, $full_shipping]);
+    $orderId = $pdo->lastInsertId();
+
+    $itemStmt = $pdo->prepare("INSERT INTO order_items (order_id, product_id, quantity) VALUES (?, ?, ?)");
+    foreach ($_SESSION['cart'] as $itemId => $quantity) {
+        $itemStmt->execute([$orderId, $itemId, $quantity]);
+    }
+    $pdo->commit();
     
     $_SESSION['cart'] = [];
-    header("Location: /order_success.php?id=" . $pdo->lastInsertId());
+    header("Location: /order_success.php?id=" . $orderId);
     exit;
 }
 ?>

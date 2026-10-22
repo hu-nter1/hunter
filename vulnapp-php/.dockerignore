@@ -1,4 +1,9 @@
 .git
 vulnapp.db
+data/
+*.log
+*.bak
+.env
+.htpasswd
 uploads/*
 !uploads/.gitkeep

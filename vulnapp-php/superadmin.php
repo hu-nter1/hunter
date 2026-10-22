@@ -1,6 +1,36 @@
 <?php
 require __DIR__ . '/config.php';
-if (getenv('SUPERADMIN_KEY') !== 'secret-key-123') { die("Access Denied."); }
+$superadminKey = getenv('SUPERADMIN_KEY');
+if ($superadminKey === false || $superadminKey === '') {
+    http_response_code(503);
+    exit('Superadmin access is not configured.');
+}
+if (empty($_SESSION['superadmin_authenticated'])) {
+    $loginError = null;
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $submittedKey = (string)($_POST['superadmin_key'] ?? '');
+        if (!hash_equals($superadminKey, $submittedKey)) {
+            http_response_code(403);
+            $loginError = 'Invalid admin key.';
+        } else {
+            session_regenerate_id(true);
+            $_SESSION['superadmin_authenticated'] = true;
+            header('Location: /superadmin.php');
+            exit;
+        }
+    }
+    ?>
+    <!doctype html><html><head><title>Superadmin Sign In</title></head><body>
+    <h2>Superadmin Sign In</h2>
+    <?php if ($loginError): ?><p><?= htmlspecialchars($loginError) ?></p><?php endif; ?>
+    <form method="POST">
+        <label>Admin key <input type="password" name="superadmin_key" required></label>
+        <button type="submit">Sign In</button>
+    </form>
+    </body></html>
+    <?php
+    exit;
+}
 $pdo = get_db();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

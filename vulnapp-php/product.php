@@ -7,6 +7,7 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 require __DIR__ . '/includes/session_check.php';
+$user = current_user();
 
 $id = (int)($_GET['id'] ?? 0);
 $stmt = get_db()->prepare("SELECT * FROM products WHERE id = ?");

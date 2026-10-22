@@ -19,7 +19,7 @@ Needs PHP 8.x with the `sqlite3`/`pdo_sqlite` extension (commonly `php-sqlite3` 
 ```bash
 php -S 127.0.0.1:8081
 ```
-Visit `http://127.0.0.1:8081`. `vulnapp.db` is created and seeded automatically on first request; delete it to reset.
+Visit `http://127.0.0.1:8081`. `data/vulnapp.db` is created and seeded automatically on first request; delete it to reset.
 
 Demo logins: `alice/alice123`, `bob/bobpass`, `admin/admin!2024`
 
@@ -57,17 +57,18 @@ are stateless/ephemeral, which breaks the SQLite file, the uploads/LFI/RCE chain
 all of which need a normal always-on filesystem and process, which Railway provides.
 
 ### Railway
-A `Dockerfile` is included (installs PHP's `pdo_sqlite` extension and runs the built-in PHP server
-on Railway's `$PORT`). From the `vulnapp-php` folder:
+A `Dockerfile` is included (installs PHP's `pdo_sqlite` extension, protects PHP requests with
+HTTP Basic Auth, and runs the built-in PHP server on Railway's `$PORT`). Set `LAB_AUTH_USER`,
+`LAB_AUTH_PASS`, and `SUPERADMIN_KEY` in Railway's service variables before exposing the app.
+For persistent data, attach a Railway volume at `/app/data` and set `APP_DATA_DIR=/app/data`.
+From the `vulnapp-php` folder:
 ```bash
 railway init      # first time only
 railway up
 ```
-Railway builds the Dockerfile and gives you a `https://<name>.up.railway.app` URL — open
-`/register.php` there once it's deployed.
+Railway builds the Dockerfile and gives you a `https://<name>.up.railway.app` URL. Keep the
+service private or retain the configured Basic Auth gate; this app intentionally contains
+vulnerabilities that can lead to remote code execution.
 
-**This app is a full RCE lab (arbitrary file upload + LFI + OS command injection) with no login
-required to reach any of it.** Don't share the Railway URL publicly, and remove/pause the service
-when you're done testing. Every redeploy or restart wipes `vulnapp.db` and `uploads/` and reseeds
-the demo data, since Railway's filesystem isn't meant to persist file writes across deploys —
-that's expected here, not a bug.
+Without a mounted volume, the database and uploaded files use the container filesystem and may
+not survive redeploys. `uploads/` is intentionally writable for the lab exercises.
