@@ -44,6 +44,19 @@ $tables = [
     'products',
 ];
 
+$references = $pdo->query("
+    SELECT DISTINCT tc.table_name AS referencing_table, ccu.table_name AS referenced_table
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.constraint_column_usage ccu
+      ON ccu.constraint_name = tc.constraint_name
+     AND ccu.constraint_schema = tc.constraint_schema
+    WHERE tc.constraint_type = 'FOREIGN KEY'
+      AND tc.table_schema = current_schema()
+      AND ccu.table_name IN ('users', 'products', 'orders')
+    ORDER BY tc.table_name, ccu.table_name
+")->fetchAll(PDO::FETCH_ASSOC);
+fwrite(STDOUT, 'Shop foreign-key references: ' . json_encode($references) . PHP_EOL);
+
 $phase = 'clearing existing shop records';
 try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
