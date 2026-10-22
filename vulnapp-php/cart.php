@@ -1,4 +1,5 @@
 <?php
+require __DIR__ . '/auth_gate.php';
 require __DIR__ . '/config.php';
 require __DIR__ . '/includes/session_check.php';
 

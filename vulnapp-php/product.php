@@ -1,4 +1,5 @@
 <?php
+require __DIR__ . '/auth_gate.php';
 require __DIR__ . '/config.php';
 // Check login for product details
 if (!isset($_SESSION['user_id'])) {

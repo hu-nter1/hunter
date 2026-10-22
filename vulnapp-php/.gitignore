@@ -1,3 +1,21 @@
-vulnapp.db
-uploads/*
-!uploads/.gitkeep
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads (excluding .gitkeep)
+/uploads/*
+!/uploads/.gitkeep
+
+# Logs
+*.log
+
+# Sensitive credentials
+.env
+.htpasswd
+vuln_config.php
+
+# IDE / System files
+.vscode/
+.idea/
+.DS_Store

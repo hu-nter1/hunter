@@ -80,8 +80,9 @@ if (VULN_VERBOSE_ERRORS) {
     error_reporting(0);
 }
 
-define('DB_PATH', __DIR__ . '/vulnapp.db');
-define('UPLOAD_DIR', __DIR__ . '/uploads/');
+// Update the DB path to point to the persistent disk mount
+define('DB_PATH', '/var/www/html/data/vulnapp.db');
+define('UPLOAD_DIR', '/var/www/html/data/uploads/');
 
 function get_db() {
     static $pdo = null;
