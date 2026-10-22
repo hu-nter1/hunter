@@ -1,4 +1,11 @@
-<?php $user = current_user(); ?>
+<?php 
+$user = current_user(); 
+if (!VULN_MISSING_HEADERS) {
+    header("X-Frame-Options: SAMEORIGIN");
+    header("Content-Security-Policy: default-src 'self'");
+    header("X-Content-Type-Options: nosniff");
+}
+?>
 <!doctype html>
 <html lang="en">
 <head>
@@ -37,9 +44,23 @@
   <div class="brand">🛒 ShopEase</div>
   <div>
     <a href="/products.php">Products</a>
-    <?php if ($user): ?><a href="/profile.php?id=<?= (int)$user['id'] ?>">My Profile</a><?php endif; ?>
-    <a href="/admin.php">Admin</a>
-    <?php if ($user): ?><a href="/logout.php">Logout</a><?php else: ?><a href="/login.php">Login</a><a href="/register.php">Register</a><?php endif; ?>
+    <?php if ($user): ?>
+      <?php if (!$user['is_admin']): 
+          $cart_count = isset($_SESSION['cart']) ? array_sum($_SESSION['cart']) : 0;
+      ?>
+        <span style="color:#fff; margin-left:18px; font-size:14px;">Balance: $<?= htmlspecialchars((float)$user['balance']) ?></span>
+        <a href="/cart.php">Cart <?php if ($cart_count > 0): ?><span style="background:red; padding:2px 6px; border-radius:50%; font-size:10px;"><?= (int)$cart_count ?></span><?php endif; ?></a>
+        <a href="/submit_flag.php">Submit Flag</a>
+      <?php endif; ?>
+      <a href="/profile.php?id=<?= (int)$user['id'] ?>">My Profile</a>
+      <?php if ($user['is_admin']): ?>
+        <a href="/admin.php">Admin</a>
+      <?php endif; ?>
+      <a href="/logout.php">Logout</a>
+    <?php else: ?>
+      <a href="/login.php">Login</a>
+      <a href="/register.php">Register</a>
+    <?php endif; ?>
   </div>
 </nav>
 <div class="container">
