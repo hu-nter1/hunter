@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../config.php';
 $pdo = get_db();
 
-$heroes = $pdo->query(
+$flagAwards = $pdo->query(
     "SELECT h.username, COALESCE(h.email, u.email, '') AS email, h.vuln_id,
             h.learner_name, h.learner_email, h.award_code, h.flag_id,
             COALESCE(f.vulnerability_name, CASE h.vuln_id
@@ -14,6 +14,14 @@ $heroes = $pdo->query(
      LEFT JOIN flags f ON h.flag_id = f.id
      ORDER BY h.timestamp DESC"
 )->fetchAll(PDO::FETCH_ASSOC);
+$automaticAwards = $pdo->query(
+    "SELECT username, email, vuln_id, learner_name, learner_email, award_code,
+            NULL AS flag_id, vulnerability_name, 'Automatically detected' AS flag, timestamp
+     FROM automatic_awards
+     ORDER BY timestamp DESC"
+)->fetchAll(PDO::FETCH_ASSOC);
+$heroes = array_merge($flagAwards, $automaticAwards);
+usort($heroes, static fn($left, $right) => strcmp($right['timestamp'], $left['timestamp']));
 ?>
 <h3>Hall of Heroes</h3>
 <table border="1">

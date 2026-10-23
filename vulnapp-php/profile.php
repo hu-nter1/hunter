@@ -25,6 +25,13 @@ if ($profile) {
     );
     $stmt->execute([$profile['id'], $profile['username']]);
     $flags = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $automaticAwards = get_db()->prepare(
+        'SELECT vuln_id, timestamp, learner_name, learner_email, award_code, vulnerability_name
+         FROM automatic_awards WHERE user_id = ? ORDER BY timestamp DESC'
+    );
+    $automaticAwards->execute([$profile['id']]);
+    $flags = array_merge($flags, $automaticAwards->fetchAll(PDO::FETCH_ASSOC));
+    usort($flags, static fn($left, $right) => strcmp($right['timestamp'], $left['timestamp']));
 }
 
 $page_title = 'Profile';

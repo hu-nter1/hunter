@@ -39,6 +39,7 @@ $tables = [
     'remember_tokens',
     'flags',
     'hall_of_fame',
+    'automatic_awards',
     'activity_logs',
     'users',
     'products',

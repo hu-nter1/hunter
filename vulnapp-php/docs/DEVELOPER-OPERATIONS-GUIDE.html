@@ -101,7 +101,7 @@
   <ul>
     <li><code>users</code>, <code>products</code>, <code>orders</code>, and <code>order_items</code> contain shop/learner data.</li>
     <li><code>flags</code> holds challenge identifiers, names, and generated flag strings. Do not disclose values.</li>
-    <li><code>hall_of_fame</code> holds the demo-account snapshot, learner-entered name and email, flag/vulnerability references, unique certificate number, and timestamp. Login SQL injection opens the claim form and records directly without depending on a challenge-flag catalog row; the learner enters personal identity, not another flag or the shared username. Other challenges still use flag submissions.</li>
+    <li><code>hall_of_fame</code> stores submitted-flag achievements. <code>automatic_awards</code> separately stores detected login SQL-injection awards with demo-account snapshot, learner name/email, unique certificate number, vulnerability name, and timestamp. This keeps the automatic claim independent of legacy hall columns and flag-catalog rows; the learner enters personal identity, not another flag or the shared username.</li>
     <li><code>app_metadata</code> stores one-time initialization markers. Do not remove markers casually; doing so can replay a seed operation.</li>
   </ul>
   <div class="note">Use <code>VULNERABILITIES.md</code> as an evidence-based inventory, not as proof that every <code>VULN_*</code> toggle has a working challenge. Preserve the lab’s explicitly intentional behaviors unless the owner asks for a security-hardening change.</div>
@@ -155,7 +155,7 @@ git status --short</pre>
   <h3>Flag submission symptoms</h3>
   <ul>
     <li><strong>Invalid flag:</strong> confirm the same active database contains the flag; local SQLite and Neon are separate stores. Confirm the uploaded file is plain text and within the size limit.</li>
-    <li><strong>PDF not authorized/not found:</strong> the certificate route requires a signed-in learner who owns the award. Check <code>hall_of_fame.user_id</code>, <code>flag_id</code>, and <code>award_code</code>.</li>
+    <li><strong>PDF not authorized/not found:</strong> the certificate route requires a signed-in learner who owns the award. Check the relevant row in <code>automatic_awards</code> or <code>hall_of_fame</code>, including its user ID and certificate number.</li>
     <li><strong>Missing student attribution:</strong> legacy awards predate identity capture. Preserve those records as legacy entries; do not invent learner names or email addresses.</li>
   </ul>
 </section>

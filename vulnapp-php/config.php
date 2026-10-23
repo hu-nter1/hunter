@@ -287,6 +287,7 @@ function initialize_schema(PDO $pdo) {
         'remember_tokens' => '(id INTEGER PRIMARY KEY, user_id INTEGER, token TEXT)',
         'flags' => "(id $autoId, vuln_id TEXT, flag TEXT)",
         'hall_of_fame' => "(id $autoId, username TEXT, email TEXT, user_id INTEGER, vuln_id TEXT, flag_id INTEGER, learner_name TEXT, learner_email TEXT, award_code TEXT, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
+        'automatic_awards' => "(id $autoId, username TEXT, email TEXT, user_id INTEGER, vuln_id TEXT, vulnerability_name TEXT, learner_name TEXT, learner_email TEXT, award_code TEXT, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
         'activity_logs' => "(id $autoId, username TEXT, action TEXT, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
     ];
     foreach ($tables as $table => $definition) {
@@ -340,9 +341,9 @@ function initialize_schema(PDO $pdo) {
     $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS hall_of_fame_identity_award_unique
         ON hall_of_fame (user_id, flag_id, LOWER(learner_email))
         WHERE learner_email IS NOT NULL AND learner_email <> ''");
-    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS hall_of_fame_identity_auto_award_unique
-        ON hall_of_fame (user_id, vuln_id, LOWER(learner_email))
-        WHERE flag_id IS NULL AND learner_email IS NOT NULL AND learner_email <> ''");
+    $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS automatic_awards_code_unique ON automatic_awards (award_code)');
+    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS automatic_awards_identity_unique
+        ON automatic_awards (user_id, vuln_id, LOWER(learner_email))");
     seed_vulnerability_flags($pdo);
     backfill_award_codes($pdo);
 
@@ -350,14 +351,20 @@ function initialize_schema(PDO $pdo) {
         $pdo->exec("CREATE TRIGGER IF NOT EXISTS orders_created_at_default AFTER INSERT ON orders WHEN NEW.created_at IS NULL BEGIN UPDATE orders SET created_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
         $pdo->exec("CREATE TRIGGER IF NOT EXISTS hall_of_fame_timestamp_default AFTER INSERT ON hall_of_fame WHEN NEW.timestamp IS NULL BEGIN UPDATE hall_of_fame SET timestamp = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
         $pdo->exec("CREATE TRIGGER IF NOT EXISTS activity_logs_timestamp_default AFTER INSERT ON activity_logs WHEN NEW.timestamp IS NULL BEGIN UPDATE activity_logs SET timestamp = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
+        $pdo->exec("CREATE TRIGGER IF NOT EXISTS automatic_awards_timestamp_default AFTER INSERT ON automatic_awards WHEN NEW.timestamp IS NULL BEGIN UPDATE automatic_awards SET timestamp = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
     }
 }
 
 function generate_certificate_number(PDO $pdo) {
-    $exists = $pdo->prepare('SELECT 1 FROM hall_of_fame WHERE award_code = ?');
+    $exists = $pdo->prepare(
+        'SELECT 1 FROM hall_of_fame WHERE award_code = ?
+         UNION ALL
+         SELECT 1 FROM automatic_awards WHERE award_code = ?
+         LIMIT 1'
+    );
     for ($attempt = 0; $attempt < 10; $attempt++) {
         $code = (string)random_int(100000000, 999999999);
-        $exists->execute([$code]);
+        $exists->execute([$code, $code]);
         if ($exists->fetchColumn() === false) {
             return $code;
         }
@@ -383,6 +390,10 @@ function record_vulnerability_award(
     string $learnerName,
     string $learnerEmail
 ) {
+    if (($flag['id'] ?? null) === null) {
+        return record_automatic_award($pdo, $user, $flag, $learnerName, $learnerEmail);
+    }
+
     $ownsTransaction = !$pdo->inTransaction();
     if ($ownsTransaction) {
         $pdo->beginTransaction();
@@ -454,6 +465,54 @@ function record_vulnerability_award(
         }
         throw $exception;
     }
+}
+
+function record_automatic_award(
+    PDO $pdo,
+    array $user,
+    array $vulnerability,
+    string $learnerName,
+    string $learnerEmail
+) {
+    $existing = $pdo->prepare(
+        'SELECT id, timestamp, award_code, learner_name, learner_email
+         FROM automatic_awards
+         WHERE user_id = ? AND vuln_id = ? AND LOWER(learner_email) = LOWER(?)
+         ORDER BY id DESC LIMIT 1'
+    );
+    $existing->execute([$user['id'], $vulnerability['vuln_id'], $learnerEmail]);
+    $award = $existing->fetch(PDO::FETCH_ASSOC);
+    if ($award) {
+        return $award;
+    }
+
+    $awardCode = generate_certificate_number($pdo);
+    $awardId = insert_and_get_id(
+        $pdo,
+        'INSERT INTO automatic_awards
+            (username, email, user_id, vuln_id, vulnerability_name, learner_name, learner_email, award_code)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+            $user['username'],
+            $user['email'] ?? '',
+            $user['id'],
+            $vulnerability['vuln_id'],
+            $vulnerability['vulnerability_name'],
+            $learnerName,
+            $learnerEmail,
+            $awardCode,
+        ]
+    );
+    $timestampQuery = $pdo->prepare('SELECT timestamp FROM automatic_awards WHERE id = ?');
+    $timestampQuery->execute([$awardId]);
+
+    return [
+        'id' => $awardId,
+        'timestamp' => $timestampQuery->fetchColumn(),
+        'award_code' => $awardCode,
+        'learner_name' => $learnerName,
+        'learner_email' => $learnerEmail,
+    ];
 }
 
 function seed_db($onPhaseChange = null) {

@@ -125,10 +125,13 @@ constant is `true`; it does **not** confirm an implemented or reachable challeng
 - The catalog contains named challenge entries, including repeated legacy vulnerability IDs
   where the inventory maps more than one challenge to that ID. Names, not IDs alone, distinguish
   those challenges.
-- A valid submission by a signed-in learner is recorded in `hall_of_fame` with a stable demo
-  account reference, learner-entered name and email, unique certificate number, flag reference,
-  and timestamp. Existing achievement rows are preserved; missing certificate numbers are
-  generated during additive schema initialization.
+- A valid flag submission by a signed-in learner is recorded in `hall_of_fame` with a stable
+  demo-account reference, learner-entered name and email, unique certificate number, flag
+  reference, and timestamp. Existing achievement rows are preserved; missing certificate
+  numbers are generated during additive schema initialization.
+- Automatically detected login SQL-injection awards are stored separately in
+  `automatic_awards`, so their recording does not depend on legacy `hall_of_fame` columns or
+  the challenge-flag catalog.
 - By default, SQLite uses `data/vulnapp.db` (or `$APP_DATA_DIR/vulnapp.db`). If `DATABASE_URL`
   is configured, the app uses that PostgreSQL database instead. Neon is initialized on normal
   application startup; no shop-data reset is required for the flag catalog.
@@ -147,13 +150,13 @@ constant is `true`; it does **not** confirm an implemented or reachable challeng
    existing award.
 4. Login SQL injection is detected when the vulnerable query authenticates a learner who would
    not authenticate with an exact username/password check. That success opens the same identity
-   claim form. This award is saved directly with its vulnerability ID and does not depend on a
-   row in the challenge-flag catalog. Learners enter their personal name and email there, not
-   another flag or the shared username. Other challenge types still require flag submission;
-   automatic exploit detection is not implemented for every catalog entry. After a claim is
-   saved, the page confirms the discovery and links to its PDF certificate. The learner profile
-   lists individual identity and certificate links. `generate_cert.php` authorizes by
-   certificate number and signed-in demo account.
+   claim form. This award is stored in `automatic_awards`, independently of legacy
+   `hall_of_fame` constraints and challenge-flag catalog rows. Learners enter their personal
+   name and email there, not another flag or the shared username. Other challenge types still
+   require flag submission; automatic exploit detection is not implemented for every catalog
+   entry. After a claim is saved, the page confirms the discovery and links to its PDF
+   certificate. The learner profile lists individual identity and certificate links.
+   `generate_cert.php` authorizes by certificate number and signed-in demo account.
 
 Flags are stored in the database, so do not publish their values in documentation or expose
 them in learner-facing catalog pages. A fresh deployment creates catalog values automatically;
