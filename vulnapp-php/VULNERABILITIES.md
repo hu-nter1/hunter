@@ -163,6 +163,10 @@ every unverified toggle would require a separate scope decision.
 - Automatically detected login SQL-injection awards are stored separately in
   `automatic_awards`, so their recording does not depend on legacy `hall_of_fame` columns or
   the challenge-flag catalog.
+- The additive `award_claims` registry reserves each challenge and case-insensitive learner
+  email globally across demo accounts. Existing award rows are retained; when historical
+  duplicates exist, the earliest award is the canonical one for subsequent claims. The email
+  is not independently verified.
 - By default, SQLite uses `data/vulnapp.db` (or `$APP_DATA_DIR/vulnapp.db`). If `DATABASE_URL`
   is configured, the app uses that PostgreSQL database instead. Neon is initialized on normal
   application startup; no shop-data reset is required for the flag catalog.
@@ -177,8 +181,9 @@ every unverified toggle would require a separate scope decision.
    read for validation and is not stored on the server. After validation, enter the individual
    learner's name and email. Awards show the shared demo account, learner identity, unique
    certificate number, vulnerability type, and discovery time in the Superadmin **Hall of
-   Heroes**. Re-submitting a flag for the same account, challenge, and learner email reuses the
-   existing award.
+   Heroes**. Re-submitting the same challenge for the same learner email reuses the original
+   award across demo accounts (email comparison is case-insensitive); no duplicate certificate
+   is created.
 4. Login SQL injection is detected when the vulnerable query authenticates a learner who would
    not authenticate with an exact username/password check. That success opens the same identity
    claim form. This award is stored in `automatic_awards`, independently of legacy

@@ -32,7 +32,10 @@ submission. For a login bypass, learners enter their own name and email on that 
 shared demo username or another flag. Uploaded files are limited to 16 KB, read as plain text,
 and not stored by the app. Other flag submissions are self-reported and do not automatically
 detect an exploit. Directly detected login awards use the additive `automatic_awards` table,
-separate from the legacy flag-backed achievement table.
+separate from the legacy flag-backed achievement table. The `award_claims` registry prevents
+the same case-insensitive email from claiming the same challenge twice, even across demo
+accounts; it preserves existing award rows and points repeat claims to the original account.
+Learner emails are collected for attribution but are not email-verified.
 
 ## Setup
 Needs PHP 8.x with the `sqlite3`/`pdo_sqlite` extension for local development (commonly

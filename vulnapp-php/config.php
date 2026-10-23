@@ -306,6 +306,7 @@ function initialize_schema(PDO $pdo) {
         'flags' => "(id $autoId, vuln_id TEXT, flag TEXT)",
         'hall_of_fame' => "(id $autoId, username TEXT, email TEXT, user_id INTEGER, vuln_id TEXT, flag_id INTEGER, learner_name TEXT, learner_email TEXT, award_code TEXT, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
         'automatic_awards' => "(id $autoId, username TEXT, email TEXT, user_id INTEGER, vuln_id TEXT, vulnerability_name TEXT, learner_name TEXT, learner_email TEXT, award_code TEXT, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
+        'award_claims' => "(id $autoId, challenge_key TEXT NOT NULL, learner_email TEXT NOT NULL, award_table TEXT, award_id INTEGER, created_at $timestampType DEFAULT CURRENT_TIMESTAMP)",
         'activity_logs' => "(id $autoId, username TEXT, action TEXT, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
     ];
     foreach ($tables as $table => $definition) {
@@ -362,8 +363,12 @@ function initialize_schema(PDO $pdo) {
     $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS automatic_awards_code_unique ON automatic_awards (award_code)');
     $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS automatic_awards_identity_unique
         ON automatic_awards (user_id, vuln_id, LOWER(learner_email))");
+    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS award_claims_identity_unique
+        ON award_claims (challenge_key, LOWER(learner_email))
+        WHERE learner_email <> ''");
     seed_vulnerability_flags($pdo);
     backfill_award_codes($pdo);
+    backfill_award_claim_registry($pdo);
 
     if (!USE_POSTGRES) {
         $pdo->exec("CREATE TRIGGER IF NOT EXISTS orders_created_at_default AFTER INSERT ON orders WHEN NEW.created_at IS NULL BEGIN UPDATE orders SET created_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
@@ -401,6 +406,107 @@ function backfill_award_codes(PDO $pdo) {
     }
 }
 
+function backfill_award_claim_registry(PDO $pdo) {
+    $markerKey = 'award_claim_registry_v2';
+    $marker = $pdo->prepare('SELECT metadata_value FROM app_metadata WHERE metadata_key = ?');
+    $marker->execute([$markerKey]);
+    if ($marker->fetchColumn() !== false) {
+        return;
+    }
+
+    $insert = $pdo->prepare(
+        'INSERT INTO award_claims (challenge_key, learner_email, award_table, award_id)
+         VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING'
+    );
+    $flagAwards = $pdo->query(
+        "SELECT h.id, h.vuln_id, h.learner_email,
+                COALESCE(f.vulnerability_name, CASE h.vuln_id
+                    WHEN 'VULN-004' THEN 'SQL Injection in Login'
+                    ELSE h.vuln_id END) AS vulnerability_name
+         FROM hall_of_fame h
+         LEFT JOIN flags f ON h.flag_id = f.id
+         WHERE h.learner_email IS NOT NULL AND h.learner_email <> ''
+         ORDER BY h.id"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($flagAwards as $award) {
+        $challengeKey = award_claim_challenge_key($award['vuln_id'], $award['vulnerability_name']);
+        $insert->execute([$challengeKey, $award['learner_email'], 'hall_of_fame', $award['id']]);
+    }
+
+    $automaticAwards = $pdo->query(
+        "SELECT id, vuln_id, vulnerability_name, learner_email FROM automatic_awards
+         WHERE learner_email IS NOT NULL AND learner_email <> ''
+         ORDER BY id"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($automaticAwards as $award) {
+        $challengeKey = award_claim_challenge_key($award['vuln_id'], $award['vulnerability_name']);
+        $insert->execute([$challengeKey, $award['learner_email'], 'automatic_awards', $award['id']]);
+    }
+
+    $recordMarker = $pdo->prepare(
+        'INSERT INTO app_metadata (metadata_key, metadata_value) VALUES (?, ?)
+         ON CONFLICT (metadata_key) DO NOTHING'
+    );
+    $recordMarker->execute([$markerKey, gmdate('c')]);
+}
+
+function award_claim_challenge_key(string $vulnerabilityId, ?string $vulnerabilityName) {
+    $challengeName = trim((string)$vulnerabilityName);
+    return strtolower($challengeName !== '' ? $challengeName : trim($vulnerabilityId));
+}
+
+function reserve_award_claim(PDO $pdo, string $challengeKey, string $learnerEmail) {
+    $reservation = $pdo->prepare(
+        'INSERT INTO award_claims (challenge_key, learner_email)
+         VALUES (?, ?) ON CONFLICT DO NOTHING'
+    );
+    $reservation->execute([$challengeKey, $learnerEmail]);
+    return $reservation->rowCount() === 1;
+}
+
+function find_registered_award(PDO $pdo, string $challengeKey, string $learnerEmail) {
+    $claim = $pdo->prepare(
+        'SELECT award_table, award_id FROM award_claims
+         WHERE challenge_key = ? AND LOWER(learner_email) = LOWER(?)'
+    );
+    $claim->execute([$challengeKey, $learnerEmail]);
+    $registeredClaim = $claim->fetch(PDO::FETCH_ASSOC);
+    if (!$registeredClaim || $registeredClaim['award_id'] === null) {
+        throw new RuntimeException('The existing award claim could not be resolved.');
+    }
+
+    $table = $registeredClaim['award_table'];
+    if (!in_array($table, ['hall_of_fame', 'automatic_awards'], true)) {
+        throw new RuntimeException('The existing award claim has an invalid record source.');
+    }
+    $awardQuery = $pdo->prepare(
+        "SELECT id, user_id, timestamp, award_code, learner_name, learner_email
+         FROM $table WHERE id = ?"
+    );
+    $awardQuery->execute([$registeredClaim['award_id']]);
+    $award = $awardQuery->fetch(PDO::FETCH_ASSOC);
+    if (!$award) {
+        throw new RuntimeException('The registered award record no longer exists.');
+    }
+    $award['award_table'] = $table;
+    return $award;
+}
+
+function ensure_registered_award_code(PDO $pdo, array $award) {
+    if (!empty($award['award_code'])) {
+        return $award;
+    }
+
+    $table = $award['award_table'] ?? null;
+    if (!in_array($table, ['hall_of_fame', 'automatic_awards'], true)) {
+        throw new RuntimeException('The existing award has an invalid record source.');
+    }
+    $award['award_code'] = generate_certificate_number($pdo);
+    $update = $pdo->prepare("UPDATE $table SET award_code = ? WHERE id = ?");
+    $update->execute([$award['award_code'], $award['id']]);
+    return $award;
+}
+
 function record_vulnerability_award(
     PDO $pdo,
     array $user,
@@ -418,30 +524,14 @@ function record_vulnerability_award(
     }
 
     try {
-        $flagId = $flag['id'] ?? null;
-        if ($flagId === null) {
-            $existing = $pdo->prepare(
-                'SELECT id, timestamp, award_code, learner_name, learner_email FROM hall_of_fame
-                 WHERE user_id = ? AND flag_id IS NULL AND vuln_id = ?
-                   AND LOWER(learner_email) = LOWER(?)
-                 ORDER BY id DESC LIMIT 1'
-            );
-            $existing->execute([$user['id'], $flag['vuln_id'], $learnerEmail]);
-        } else {
-            $existing = $pdo->prepare(
-                'SELECT id, timestamp, award_code, learner_name, learner_email FROM hall_of_fame
-                 WHERE user_id = ? AND flag_id = ? AND LOWER(learner_email) = LOWER(?)
-                 ORDER BY id DESC LIMIT 1'
-            );
-            $existing->execute([$user['id'], $flagId, $learnerEmail]);
-        }
-        $award = $existing->fetch(PDO::FETCH_ASSOC);
-        if ($award) {
-            if (empty($award['award_code'])) {
-                $award['award_code'] = generate_certificate_number($pdo);
-                $update = $pdo->prepare('UPDATE hall_of_fame SET award_code = ? WHERE id = ?');
-                $update->execute([$award['award_code'], $award['id']]);
-            }
+        $flagId = (int)$flag['id'];
+        $challengeKey = award_claim_challenge_key(
+            (string)$flag['vuln_id'],
+            is_string($flag['vulnerability_name'] ?? null) ? $flag['vulnerability_name'] : null
+        );
+        if (!reserve_award_claim($pdo, $challengeKey, $learnerEmail)) {
+            $award = find_registered_award($pdo, $challengeKey, $learnerEmail);
+            $award = ensure_registered_award_code($pdo, $award);
             if ($ownsTransaction) {
                 $pdo->commit();
             }
@@ -464,10 +554,17 @@ function record_vulnerability_award(
                 $awardCode,
             ]
         );
+        $claimUpdate = $pdo->prepare(
+            "UPDATE award_claims SET award_table = 'hall_of_fame', award_id = ?
+             WHERE challenge_key = ? AND LOWER(learner_email) = LOWER(?)"
+        );
+        $claimUpdate->execute([$awardId, $challengeKey, $learnerEmail]);
         $timestampQuery = $pdo->prepare('SELECT timestamp FROM hall_of_fame WHERE id = ?');
         $timestampQuery->execute([$awardId]);
         $award = [
             'id' => $awardId,
+            'user_id' => $user['id'],
+            'award_table' => 'hall_of_fame',
             'timestamp' => $timestampQuery->fetchColumn(),
             'award_code' => $awardCode,
             'learner_name' => $learnerName,
@@ -492,45 +589,69 @@ function record_automatic_award(
     string $learnerName,
     string $learnerEmail
 ) {
-    $existing = $pdo->prepare(
-        'SELECT id, timestamp, award_code, learner_name, learner_email
-         FROM automatic_awards
-         WHERE user_id = ? AND vuln_id = ? AND LOWER(learner_email) = LOWER(?)
-         ORDER BY id DESC LIMIT 1'
-    );
-    $existing->execute([$user['id'], $vulnerability['vuln_id'], $learnerEmail]);
-    $award = $existing->fetch(PDO::FETCH_ASSOC);
-    if ($award) {
-        return $award;
+    $ownsTransaction = !$pdo->inTransaction();
+    if ($ownsTransaction) {
+        $pdo->beginTransaction();
     }
 
-    $awardCode = generate_certificate_number($pdo);
-    $awardId = insert_and_get_id(
-        $pdo,
-        'INSERT INTO automatic_awards
-            (username, email, user_id, vuln_id, vulnerability_name, learner_name, learner_email, award_code)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-            $user['username'],
-            $user['email'] ?? '',
-            $user['id'],
-            $vulnerability['vuln_id'],
-            $vulnerability['vulnerability_name'],
-            $learnerName,
-            $learnerEmail,
-            $awardCode,
-        ]
-    );
-    $timestampQuery = $pdo->prepare('SELECT timestamp FROM automatic_awards WHERE id = ?');
-    $timestampQuery->execute([$awardId]);
+    try {
+        $vulnerabilityId = (string)$vulnerability['vuln_id'];
+        $challengeKey = award_claim_challenge_key(
+            $vulnerabilityId,
+            is_string($vulnerability['vulnerability_name'] ?? null) ? $vulnerability['vulnerability_name'] : null
+        );
+        if (!reserve_award_claim($pdo, $challengeKey, $learnerEmail)) {
+            $award = find_registered_award($pdo, $challengeKey, $learnerEmail);
+            $award = ensure_registered_award_code($pdo, $award);
+            if ($ownsTransaction) {
+                $pdo->commit();
+            }
+            return $award;
+        }
 
-    return [
-        'id' => $awardId,
-        'timestamp' => $timestampQuery->fetchColumn(),
-        'award_code' => $awardCode,
-        'learner_name' => $learnerName,
-        'learner_email' => $learnerEmail,
-    ];
+        $awardCode = generate_certificate_number($pdo);
+        $awardId = insert_and_get_id(
+            $pdo,
+            'INSERT INTO automatic_awards
+                (username, email, user_id, vuln_id, vulnerability_name, learner_name, learner_email, award_code)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+                $user['username'],
+                $user['email'] ?? '',
+                $user['id'],
+                $vulnerabilityId,
+                $vulnerability['vulnerability_name'],
+                $learnerName,
+                $learnerEmail,
+                $awardCode,
+            ]
+        );
+        $claimUpdate = $pdo->prepare(
+            "UPDATE award_claims SET award_table = 'automatic_awards', award_id = ?
+             WHERE challenge_key = ? AND LOWER(learner_email) = LOWER(?)"
+        );
+        $claimUpdate->execute([$awardId, $challengeKey, $learnerEmail]);
+        $timestampQuery = $pdo->prepare('SELECT timestamp FROM automatic_awards WHERE id = ?');
+        $timestampQuery->execute([$awardId]);
+        $award = [
+            'id' => $awardId,
+            'user_id' => $user['id'],
+            'award_table' => 'automatic_awards',
+            'timestamp' => $timestampQuery->fetchColumn(),
+            'award_code' => $awardCode,
+            'learner_name' => $learnerName,
+            'learner_email' => $learnerEmail,
+        ];
+        if ($ownsTransaction) {
+            $pdo->commit();
+        }
+        return $award;
+    } catch (Throwable $exception) {
+        if ($ownsTransaction && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
+    }
 }
 
 function seed_db($onPhaseChange = null) {

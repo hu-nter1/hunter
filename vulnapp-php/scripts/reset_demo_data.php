@@ -40,6 +40,7 @@ $tables = [
     'flags',
     'hall_of_fame',
     'automatic_awards',
+    'award_claims',
     'activity_logs',
     'users',
     'products',

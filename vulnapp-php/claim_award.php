@@ -95,6 +95,11 @@ require __DIR__ . '/includes/header.php';
   <?php if ($pendingAwardError && !$flag): ?>
     <div class="error" role="alert">Your login bypass was detected, but we could not prepare the achievement record. Please contact your lab instructor; you do not need to submit another flag.</div>
     <a class="button-link" href="/products.php">Continue to ShopEase</a>
+  <?php elseif ($award && (int)$award['user_id'] !== (int)$user['id']): ?>
+    <div class="success" role="status">
+      <strong>No duplicate award was created.</strong> This challenge has already been recorded for this email. Sign in to the demo account used for the original claim to access its certificate.
+    </div>
+    <a href="/products.php">Return to ShopEase</a>
   <?php elseif ($award): ?>
     <div class="success" role="status">
       <strong>Discovery confirmed.</strong> Your achievement has been recorded for <?= htmlspecialchars($learnerName) ?>.

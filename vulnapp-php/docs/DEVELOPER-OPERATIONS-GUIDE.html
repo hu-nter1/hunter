@@ -101,7 +101,7 @@
   <ul>
     <li><code>users</code>, <code>products</code>, <code>orders</code>, and <code>order_items</code> contain shop/learner data.</li>
     <li><code>flags</code> holds challenge identifiers, names, and generated flag strings. Do not disclose values.</li>
-    <li><code>hall_of_fame</code> stores submitted-flag achievements. <code>automatic_awards</code> separately stores detected login SQL-injection awards with demo-account snapshot, learner name/email, unique certificate number, vulnerability name, and timestamp. This keeps the automatic claim independent of legacy hall columns and flag-catalog rows; the learner enters personal identity, not another flag or the shared username.</li>
+    <li><code>hall_of_fame</code> stores submitted-flag achievements. <code>automatic_awards</code> separately stores detected login SQL-injection awards with demo-account snapshot, learner name/email, unique certificate number, vulnerability name, and timestamp. <code>award_claims</code> globally reserves each challenge and case-insensitive learner email across shared demo accounts, without deleting historical award rows. Learner email addresses are not verified.</li>
     <li><code>app_metadata</code> stores one-time initialization markers. Do not remove markers casually; doing so can replay a seed operation.</li>
   </ul>
   <div class="note">Use <code>VULNERABILITIES.md</code> as an evidence-based inventory, not as proof that every <code>VULN_*</code> toggle has a working challenge. Preserve the lab’s explicitly intentional behaviors unless the owner asks for a security-hardening change.</div>
@@ -130,7 +130,7 @@ git status --short</pre>
     <li>Cart quantity is at least one; checkout rechecks product and balance.</li>
     <li>Search should be case-insensitive.</li>
     <li>Flag upload accepts plain-text content and does not retain the uploaded file.</li>
-    <li>Repeated flag submission by the same demo account for the same challenge and learner email must reuse the existing award and certificate number.</li>
+    <li>Repeated claims for the same challenge and case-insensitive learner email must reuse the original award across demo accounts; the existing certificate remains downloadable only from the account that owns it.</li>
     <li>Admin deletion must work even when an image field contains a relative upload path.</li>
   </ul>
 </section>
