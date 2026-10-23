@@ -213,10 +213,8 @@ function seed_vulnerability_flags(PDO $pdo) {
     }
 
     $inserted = 0;
-    $integerType = USE_POSTGRES ? 'BIGINT' : 'INTEGER';
     $find = $pdo->prepare('SELECT id FROM flags WHERE vulnerability_name = ?');
-    $insert = $pdo->prepare('INSERT INTO flags (vuln_id, vulnerability_name, flag) VALUES (?, ?, ?)');
-    $insertWithId = $pdo->prepare('INSERT INTO flags (id, vuln_id, vulnerability_name, flag) VALUES (?, ?, ?, ?)');
+    $insert = $pdo->prepare('INSERT INTO flags (vuln_id, vulnerability_name, flag) VALUES (?, ?, ?) ON CONFLICT DO NOTHING');
 
     foreach (vulnerability_flag_catalog() as [$vulnerabilityId, $vulnerabilityName]) {
         $find->execute([$vulnerabilityName]);
@@ -225,28 +223,20 @@ function seed_vulnerability_flags(PDO $pdo) {
         }
 
         $flag = 'FLAG{' . strtoupper(bin2hex(random_bytes(16))) . '}';
-        $ownsTransaction = !$pdo->inTransaction();
-        if ($ownsTransaction) {
-            $pdo->beginTransaction();
-        }
         try {
             if (USE_POSTGRES) {
                 $insert->execute([$vulnerabilityId, $vulnerabilityName, $flag]);
             } else {
+                $integerType = 'INTEGER';
                 $nextId = (int)$pdo->query(
                     "SELECT COALESCE(MAX(CAST(id AS $integerType)), 0) + 1 FROM flags"
                 )->fetchColumn();
+                $insertWithId = $pdo->prepare('INSERT INTO flags (id, vuln_id, vulnerability_name, flag) VALUES (?, ?, ?, ?)');
                 $insertWithId->execute([$nextId, $vulnerabilityId, $vulnerabilityName, $flag]);
-            }
-            if ($ownsTransaction) {
-                $pdo->commit();
             }
             $inserted++;
         } catch (Throwable $ex) {
-            if ($ownsTransaction && $pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            // Ignore duplicate key races gracefully
+            // Ignore duplicate key races gracefully without leaving connection in aborted state
         }
     }
 
