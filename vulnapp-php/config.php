@@ -205,55 +205,56 @@ function vulnerability_flag_catalog() {
 }
 
 function seed_vulnerability_flags(PDO $pdo) {
-    $markerKey = 'vulnerability_flag_catalog_v1';
+    $markerKey = 'vulnerability_flag_catalog_v2';
     $marker = $pdo->prepare('SELECT metadata_value FROM app_metadata WHERE metadata_key = ?');
     $marker->execute([$markerKey]);
     if ($marker->fetchColumn() !== false) {
         return;
     }
 
-    $pdo->beginTransaction();
-    try {
-        if (USE_POSTGRES) {
-            $pdo->query('SELECT pg_advisory_xact_lock(741902381)')->fetchColumn();
+    $inserted = 0;
+    $integerType = USE_POSTGRES ? 'BIGINT' : 'INTEGER';
+    $find = $pdo->prepare('SELECT id FROM flags WHERE vulnerability_name = ?');
+    $insert = $pdo->prepare('INSERT INTO flags (vuln_id, vulnerability_name, flag) VALUES (?, ?, ?)');
+    $insertWithId = $pdo->prepare('INSERT INTO flags (id, vuln_id, vulnerability_name, flag) VALUES (?, ?, ?, ?)');
+
+    foreach (vulnerability_flag_catalog() as [$vulnerabilityId, $vulnerabilityName]) {
+        $find->execute([$vulnerabilityName]);
+        if ($find->fetchColumn() !== false) {
+            continue;
         }
 
-        $marker->execute([$markerKey]);
-        if ($marker->fetchColumn() !== false) {
-            $pdo->commit();
-            return;
+        $flag = 'FLAG{' . strtoupper(bin2hex(random_bytes(16))) . '}';
+        $ownsTransaction = !$pdo->inTransaction();
+        if ($ownsTransaction) {
+            $pdo->beginTransaction();
         }
-
-        $inserted = 0;
-        $integerType = USE_POSTGRES ? 'BIGINT' : 'INTEGER';
-        $nextId = (int)$pdo->query(
-            "SELECT COALESCE(MAX(CAST(id AS $integerType)), 0) + 1 FROM flags"
-        )->fetchColumn();
-        $find = $pdo->prepare('SELECT id FROM flags WHERE vulnerability_name = ?');
-        $insert = $pdo->prepare('INSERT INTO flags (id, vuln_id, vulnerability_name, flag) VALUES (?, ?, ?, ?)');
-        foreach (vulnerability_flag_catalog() as [$vulnerabilityId, $vulnerabilityName]) {
-            $find->execute([$vulnerabilityName]);
-            if ($find->fetchColumn() !== false) {
-                continue;
+        try {
+            if (USE_POSTGRES) {
+                $insert->execute([$vulnerabilityId, $vulnerabilityName, $flag]);
+            } else {
+                $nextId = (int)$pdo->query(
+                    "SELECT COALESCE(MAX(CAST(id AS $integerType)), 0) + 1 FROM flags"
+                )->fetchColumn();
+                $insertWithId->execute([$nextId, $vulnerabilityId, $vulnerabilityName, $flag]);
             }
-
-            $flag = 'FLAG{' . strtoupper(bin2hex(random_bytes(16))) . '}';
-            $insert->execute([$nextId++, $vulnerabilityId, $vulnerabilityName, $flag]);
+            if ($ownsTransaction) {
+                $pdo->commit();
+            }
             $inserted++;
+        } catch (Throwable $ex) {
+            if ($ownsTransaction && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            // Ignore duplicate key races gracefully
         }
+    }
 
-        $recordMarker = $pdo->prepare('INSERT INTO app_metadata (metadata_key, metadata_value) VALUES (?, ?)');
-        $recordMarker->execute([$markerKey, gmdate('c')]);
-        $pdo->commit();
+    $recordMarker = $pdo->prepare('INSERT INTO app_metadata (metadata_key, metadata_value) VALUES (?, ?) ON CONFLICT (metadata_key) DO NOTHING');
+    $recordMarker->execute([$markerKey, gmdate('c')]);
 
-        if ($inserted > 0) {
-            error_log("Seeded $inserted missing vulnerability flags into the active database.");
-        }
-    } catch (Throwable $exception) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        error_log('Vulnerability flag catalog initialization failed: ' . $exception->getMessage());
+    if ($inserted > 0) {
+        error_log("Seeded $inserted missing vulnerability flags into the active database.");
     }
 }
 
