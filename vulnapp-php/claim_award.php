@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 unset($_SESSION['pending_award'], $_SESSION['pending_award_flag_id']);
             } catch (Throwable $exception) {
                 error_log('Award claim failed: ' . $exception->getMessage());
-                $error = 'We could not save your achievement right now. Please retry, or contact your lab instructor if the problem continues.';
+                $error = 'We could not save your achievement right now: ' . $exception->getMessage();
             }
         }
     }
