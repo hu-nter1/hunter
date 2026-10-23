@@ -25,7 +25,7 @@ usort($heroes, static fn($left, $right) => strcmp($right['timestamp'], $left['ti
 ?>
 <h3>Hall of Heroes</h3>
 <table border="1">
-    <tr><th>Learner</th><th>Learner email</th><th>Demo account</th><th>Certificate #</th><th>Flag</th><th>Vulnerability Type</th><th>Time (UTC)</th></tr>
+    <tr><th>Learner</th><th>Learner email</th><th>Demo account</th><th>Certificate #</th><th>Flag</th><th>Vulnerability Type</th><th>Time (EAT)</th></tr>
     <?php if (empty($heroes)): ?>
     <tr><td colspan="7">No discoveries have been submitted yet.</td></tr>
     <?php endif; ?>
@@ -37,7 +37,7 @@ usort($heroes, static fn($left, $right) => strcmp($right['timestamp'], $left['ti
         <td><?= htmlspecialchars($h['award_code'] ?? '') ?></td>
         <td><code><?= htmlspecialchars($h['flag'] ?? ($h['flag_id'] === null ? 'Automatically detected' : 'Legacy entry')) ?></code></td>
         <td><?= htmlspecialchars($h['vulnerability_name']) ?> (<?= htmlspecialchars($h['vuln_id']) ?>)</td>
-        <td><?= htmlspecialchars($h['timestamp']) ?></td>
+        <td><?= htmlspecialchars(format_eat_datetime($h['timestamp'])) ?></td>
     </tr>
     <?php endforeach; ?>
 </table>

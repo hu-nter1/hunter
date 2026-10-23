@@ -8,6 +8,10 @@ define('VULN_SQLI_PRODUCT_SEARCH', true);
 define('VULN_IDOR_ORDER_VIEW', true);
 define('VULN_PATH_TRAVERSAL_INCLUDE', true);
 define('VULN_COMMAND_INJECTION', false);
+define('VULN_XXE_IMPORT', false);
+define('VULN_PARAMETER_POLLUTION', false);
+define('VULN_COUPON_STACKING', false);
+define('VULN_REDOS', false);
 define('VULN_BROKEN_ACCESS_CONTROL', true);
 define('VULN_HEADER_SQLI', true);
 define('VULN_SQLI_LOGIN', true);
@@ -125,9 +129,23 @@ function get_db() {
             $pdo = new PDO('sqlite:' . DB_PATH);
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         }
+        if (USE_POSTGRES) {
+            $pdo->exec("SET TIME ZONE 'UTC'");
+        }
         initialize_schema($pdo);
     }
     return $pdo;
+}
+
+function format_eat_datetime($timestamp) {
+    if ($timestamp === null || $timestamp === '') {
+        return '';
+    }
+
+    $dateTime = new DateTimeImmutable((string)$timestamp, new DateTimeZone('UTC'));
+    return $dateTime
+        ->setTimezone(new DateTimeZone('Africa/Kampala'))
+        ->format('Y-m-d H:i:s T');
 }
 
 function insert_and_get_id(PDO $pdo, $sql, array $params = []) {

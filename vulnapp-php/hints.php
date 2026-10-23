@@ -10,12 +10,6 @@ require __DIR__ . '/includes/header.php';
     <?php if (VULN_SQLI_PRODUCT_SEARCH): ?>
         <li><strong>SQL Injection:</strong> Try searching for products with characters like <code>'</code> or <code>--</code>.</li>
     <?php endif; ?>
-    <?php if (VULN_STORED_XSS): ?>
-        <li><strong>XSS:</strong> Try posting a review with <code>&lt;script&gt;alert('XSS')&lt;/script&gt;</code>.</li>
-    <?php endif; ?>
-    <?php if (VULN_UNRESTRICTED_FILE_UPLOAD): ?>
-        <li><strong>File Upload:</strong> Can you bypass the image check by uploading a file with a double extension?</li>
-    <?php endif; ?>
     <?php if (VULN_IDOR_ORDER_VIEW): ?>
         <li><strong>IDOR:</strong> Check the URL when viewing an order success page. Can you guess another ID?</li>
     <?php endif; ?>

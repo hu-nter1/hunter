@@ -49,7 +49,7 @@ require __DIR__ . '/includes/header.php';
         <?php foreach ($flags as $f): ?>
             <li>
                 <?= htmlspecialchars($f['vulnerability_name']) ?> (<?= htmlspecialchars($f['vuln_id']) ?>)
-                — <?= htmlspecialchars($f['timestamp']) ?>
+                — <?= htmlspecialchars(format_eat_datetime($f['timestamp'])) ?>
                 <?php if (!empty($f['learner_name'])): ?>
                     <br><span class="muted">Claimed by <?= htmlspecialchars($f['learner_name']) ?> · <?= htmlspecialchars($f['learner_email']) ?> · Certificate <?= htmlspecialchars($f['award_code']) ?></span>
                 <?php endif; ?>

@@ -117,6 +117,7 @@
 APP_DATA_DIR=/tmp/shopease-dev php -S 127.0.0.1:8081</pre>
   <p>Open <code>http://127.0.0.1:8081</code>. <code>APP_DATA_DIR</code> keeps test data away from the repository’s normal local database. Remove only the named disposable test directory when finished. Do not point local experiments at production <code>DATABASE_URL</code>.</p>
   <p>When <code>DATABASE_URL</code> is absent, SQLite is stored at <code>data/vulnapp.db</code> (or under <code>APP_DATA_DIR</code>). On first initialization, demo users/products and the named challenge catalog are seeded if needed. Demo account details are in the project README; do not reuse them as real credentials.</p>
+  <p>Database timestamps are stored in UTC. Learner and admin award timestamps and generated certificate times are displayed in <strong>Africa/Kampala (EAT, UTC+03:00)</strong>; do not change stored values to local time.</p>
   <h3>Minimum verification before a change is accepted</h3>
   <pre># From vulnapp-php/
 find . -type f -name '*.php' -print0 | xargs -0 -n1 php -l

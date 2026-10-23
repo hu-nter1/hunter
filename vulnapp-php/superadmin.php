@@ -197,7 +197,7 @@ usort($heroes, static fn($left, $right) => strcmp($right['timestamp'], $left['ti
         <td><?= htmlspecialchars($h['award_code'] ?? '') ?></td>
         <td><code><?= htmlspecialchars($h['flag'] ?? ($h['flag_id'] === null ? 'Automatically detected' : 'Legacy entry')) ?></code></td>
         <td><?= htmlspecialchars($h['vulnerability_name']) ?> (<?= htmlspecialchars($h['vuln_id']) ?>)</td>
-        <td><?= htmlspecialchars($h['timestamp']) ?></td>
+        <td><?= htmlspecialchars(format_eat_datetime($h['timestamp'])) ?></td>
     </tr>
     <?php endforeach; ?></table>
 </div>

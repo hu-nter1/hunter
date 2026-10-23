@@ -59,7 +59,7 @@ require __DIR__ . '/includes/certificate_pdf.php';
 send_certificate_pdf(
     $user['username'],
     $award['vulnerability_name'] ?: $award['vuln_id'],
-    $award['timestamp'] . ' UTC',
+    format_eat_datetime($award['timestamp']),
     $award['learner_name'] ?? '',
     $award['learner_email'] ?? '',
     $award['award_code'] ?? ''

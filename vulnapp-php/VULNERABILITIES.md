@@ -7,11 +7,11 @@ public Render deployment, real customer data, or production credentials for exer
 ## Important status
 
 The vulnerability switches in `config.php` are not a reliable checklist of working exercises.
-There are 65 defined `VULN_*` switches: 64 are `true` and `VULN_COMMAND_INJECTION` is `false`,
-but many enabled switches do not have corresponding behavior in this PHP app. The findings
-below distinguish code that was confirmed from labels that are only configured. This is a
-source-based inventory, not a claim that every toggle or every possible bug was dynamically
-tested.
+There are 69 defined `VULN_*` switches: 63 are `true` and six are `false`. Only a subset of
+enabled switches is connected to application behavior, and some refer only to hints or obsolete
+settings. The findings below distinguish code that was confirmed from labels that are only
+configured. This is a source-based inventory, not a claim that every toggle or every possible
+bug was dynamically tested.
 
 The current source also differs from older versions of this guide: for example, product image
 uploads are validated and renamed, checkout recalculates prices from the database, and product
@@ -77,6 +77,8 @@ constant is `true`; it does **not** confirm an implemented or reachable challeng
 - `VULN_PATH_TRAVERSAL_INCLUDE` and `VULN_BROKEN_ACCESS_CONTROL` are not the switches governing
   the observed admin include and URL-quirk behavior. `VULN_HTTP_VERB_TAMPERING` has a check in
   a helper that no current page calls.
+- The unsafe remember-cookie `unserialize()` is controlled by `VULN_WEAK_REMEMBER_ME`;
+  `VULN_INSECURE_DESERIALIZATION` is enabled but unused.
 
 ### Browser/client-side and CSRF
 
@@ -106,13 +108,42 @@ constant is `true`; it does **not** confirm an implemented or reachable challeng
 
 ### Remaining configured toggles
 
-- Enabled: `VULN_ROUNDING_ERROR` (listed above).
-- Disabled: `VULN_COMMAND_INJECTION`, `VULN_VERBOSE_ERRORS`.
+- Enabled but not implemented: `VULN_ROUNDING_ERROR`.
+- Disabled: `VULN_COMMAND_INJECTION`, `VULN_VERBOSE_ERRORS`, `VULN_XXE_IMPORT`,
+  `VULN_PARAMETER_POLLUTION`, `VULN_COUPON_STACKING`, `VULN_REDOS`.
 - No current application behavior was confirmed for command injection; do not enable it or
   interpret its name as an implemented challenge.
-- `VULN_XXE_IMPORT`, `VULN_PARAMETER_POLLUTION`, `VULN_COUPON_STACKING`, and `VULN_REDOS` are
-  referenced in page modules but are **not defined** in `config.php`. Those routes may raise
-  runtime errors rather than provide reliable exercises.
+- The four disabled toggles above are explicitly defined so their modules do not fail with an
+  undefined-constant error. The import, discount, and validation modules are incomplete and
+  should not be treated as verified exercises.
+
+### Toggle-to-code audit result
+
+A source scan of the current PHP files found that not all configured vulnerabilities are real,
+reachable challenges. Several enabled constants are never read outside their definitions; some
+are named only by the hint page or the older settings page. `VULN_HTTP_VERB_TAMPERING` is read
+inside an access-control helper that no current route calls. The configured names do not
+automatically enable or validate challenge behavior.
+
+Code paths currently contain the following confirmed behaviors: product-search and login SQL
+injection, User-Agent SQL injection, weak/plaintext demo passwords, session fixation, IDOR on
+order viewing and profile editing, an admin URL-quirk access check, receipt path traversal,
+unrestricted remote fetching (SSRF), unsafe remember-cookie deserialization, a diagnostic
+`phpinfo()` endpoint, missing security headers, and an unbounded quantity in the legacy
+quantity-update module. These findings are subject to the reachability caveats above; in
+particular, web-server path handling affects the admin URL quirk.
+
+The following are not verified as working challenges in the current PHP app: rate limiting,
+predictable session IDs or reset tokens, username enumeration, command injection, XSS, browser
+or client-side JavaScript issues, checkout price tampering/mass assignment, race conditions,
+coupon/discount abuse, unrestricted image upload, and the other configured toggles not mapped
+to an implemented code path. The four disabled import/discount/validation toggles are incomplete
+modules, not working challenges. Several hint-page suggestions also describe exercises that
+are not present; do not rely on hints as proof of implementation.
+
+This confirms that the statement “every vulnerability named in `config.php` works” is **false**.
+The app intentionally retains only the vulnerable code paths documented above; implementing
+every unverified toggle would require a separate scope decision.
 
 ## Flags: storage, submission, and availability
 
