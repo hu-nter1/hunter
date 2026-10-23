@@ -240,6 +240,15 @@ function seed_vulnerability_flags(PDO $pdo) {
 }
 
 function get_or_create_vulnerability_flag(PDO $pdo, string $vulnerabilityId, string $vulnerabilityName) {
+    $find = $pdo->prepare(
+        'SELECT id, vuln_id, vulnerability_name FROM flags WHERE vulnerability_name = ? LIMIT 1'
+    );
+    $find->execute([$vulnerabilityName]);
+    $flag = $find->fetch(PDO::FETCH_ASSOC);
+    if ($flag) {
+        return $flag;
+    }
+
     $ownsTransaction = !$pdo->inTransaction();
     if ($ownsTransaction) {
         $pdo->beginTransaction();
@@ -250,9 +259,6 @@ function get_or_create_vulnerability_flag(PDO $pdo, string $vulnerabilityId, str
             $pdo->query('SELECT pg_advisory_xact_lock(741902381)')->fetchColumn();
         }
 
-        $find = $pdo->prepare(
-            'SELECT id, vuln_id, vulnerability_name FROM flags WHERE vulnerability_name = ? LIMIT 1'
-        );
         $find->execute([$vulnerabilityName]);
         $flag = $find->fetch(PDO::FETCH_ASSOC);
         if (!$flag) {
