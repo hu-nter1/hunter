@@ -101,7 +101,7 @@
   <ul>
     <li><code>users</code>, <code>products</code>, <code>orders</code>, and <code>order_items</code> contain shop/learner data.</li>
     <li><code>flags</code> holds challenge identifiers, names, and generated flag strings. Do not disclose values.</li>
-    <li><code>hall_of_fame</code> holds the demo-account snapshot, learner-entered name and email, flag/vulnerability references, unique certificate number, and timestamp. Login SQL injection automatically opens the claim form; other challenges still use flag submissions.</li>
+    <li><code>hall_of_fame</code> holds the demo-account snapshot, learner-entered name and email, flag/vulnerability references, unique certificate number, and timestamp. Login SQL injection automatically opens the claim form and repairs its named challenge-flag row if missing; the learner enters personal identity, not another flag or the shared username. Other challenges still use flag submissions.</li>
     <li><code>app_metadata</code> stores one-time initialization markers. Do not remove markers casually; doing so can replay a seed operation.</li>
   </ul>
   <div class="note">Use <code>VULNERABILITIES.md</code> as an evidence-based inventory, not as proof that every <code>VULN_*</code> toggle has a working challenge. Preserve the lab’s explicitly intentional behaviors unless the owner asks for a security-hardening change.</div>

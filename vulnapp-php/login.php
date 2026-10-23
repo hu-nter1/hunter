@@ -61,18 +61,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['is_admin'] = (bool)$user['is_admin'];
 
         if ($sqlInjectionBypass) {
-            $flagQuery = get_db()->prepare(
-                'SELECT id, vuln_id, vulnerability_name
-                 FROM flags WHERE vuln_id = ? AND vulnerability_name = ? LIMIT 1'
-            );
-            $flagQuery->execute(['VULN-004', 'SQL Injection in Login']);
-            $flag = $flagQuery->fetch(PDO::FETCH_ASSOC);
-            if ($flag) {
+            try {
+                $flag = get_or_create_vulnerability_flag(
+                    get_db(),
+                    'VULN-004',
+                    'SQL Injection in Login'
+                );
                 $_SESSION['pending_award_flag_id'] = (int)$flag['id'];
-                header('Location: /claim_award.php');
-                exit;
+            } catch (Throwable $exception) {
+                error_log('Unable to prepare the login SQL-injection award: ' . $exception->getMessage());
+                $_SESSION['pending_award_error'] = true;
             }
-            error_log('Login SQL injection was detected, but its award catalog entry is missing.');
+            header('Location: /claim_award.php');
+            exit;
         }
 
         header('Location: /products.php');

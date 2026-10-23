@@ -239,6 +239,56 @@ function seed_vulnerability_flags(PDO $pdo) {
     }
 }
 
+function get_or_create_vulnerability_flag(PDO $pdo, string $vulnerabilityId, string $vulnerabilityName) {
+    $ownsTransaction = !$pdo->inTransaction();
+    if ($ownsTransaction) {
+        $pdo->beginTransaction();
+    }
+
+    try {
+        if (USE_POSTGRES) {
+            $pdo->query('SELECT pg_advisory_xact_lock(741902381)')->fetchColumn();
+        }
+
+        $find = $pdo->prepare(
+            'SELECT id, vuln_id, vulnerability_name FROM flags WHERE vulnerability_name = ? LIMIT 1'
+        );
+        $find->execute([$vulnerabilityName]);
+        $flag = $find->fetch(PDO::FETCH_ASSOC);
+        if (!$flag) {
+            $integerType = USE_POSTGRES ? 'BIGINT' : 'INTEGER';
+            $nextId = (int)$pdo->query(
+                "SELECT COALESCE(MAX(CAST(id AS $integerType)), 0) + 1 FROM flags"
+            )->fetchColumn();
+            $flagId = insert_and_get_id(
+                $pdo,
+                'INSERT INTO flags (id, vuln_id, vulnerability_name, flag) VALUES (?, ?, ?, ?)',
+                [
+                    $nextId,
+                    $vulnerabilityId,
+                    $vulnerabilityName,
+                    'FLAG{' . strtoupper(bin2hex(random_bytes(16))) . '}',
+                ]
+            );
+            $flag = [
+                'id' => $flagId,
+                'vuln_id' => $vulnerabilityId,
+                'vulnerability_name' => $vulnerabilityName,
+            ];
+        }
+
+        if ($ownsTransaction) {
+            $pdo->commit();
+        }
+        return $flag;
+    } catch (Throwable $exception) {
+        if ($ownsTransaction && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
+    }
+}
+
 function save_product_image_upload($field = 'product_image') {
     if (!isset($_FILES[$field]) || $_FILES[$field]['error'] === UPLOAD_ERR_NO_FILE) {
         return null;

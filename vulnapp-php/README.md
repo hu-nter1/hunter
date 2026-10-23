@@ -28,8 +28,10 @@ their computer. Valid submissions ask for the learner's name and email, then iss
 certificate with a unique number. Awards are listed in the Superadmin Hall of Heroes with
 the individual learner identity and shared demo account. Successful SQL-injection login
 bypasses open the award-claim form automatically; other challenges still require flag
-submission. Uploaded files are limited to 16 KB, read as plain text, and not stored by the
-app. Other flag submissions are self-reported and do not automatically detect an exploit.
+submission. For a login bypass, learners enter their own name and email on that form—not the
+shared demo username or another flag. Uploaded files are limited to 16 KB, read as plain text,
+and not stored by the app. Other flag submissions are self-reported and do not automatically
+detect an exploit.
 
 ## Setup
 Needs PHP 8.x with the `sqlite3`/`pdo_sqlite` extension for local development (commonly

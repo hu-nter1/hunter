@@ -9,19 +9,23 @@ if (!$user) {
 }
 
 $pendingFlagId = (int)($_SESSION['pending_award_flag_id'] ?? 0);
-if ($pendingFlagId < 1) {
+$pendingAwardError = !empty($_SESSION['pending_award_error']);
+unset($_SESSION['pending_award_error']);
+if ($pendingFlagId < 1 && !$pendingAwardError) {
     header('Location: /products.php');
     exit;
 }
 
 $pdo = get_db();
-$flagQuery = $pdo->prepare('SELECT id, vuln_id, vulnerability_name FROM flags WHERE id = ?');
-$flagQuery->execute([$pendingFlagId]);
-$flag = $flagQuery->fetch(PDO::FETCH_ASSOC);
-if (!$flag) {
-    unset($_SESSION['pending_award_flag_id']);
-    http_response_code(404);
-    exit('The achievement is no longer available.');
+$flag = false;
+if ($pendingFlagId > 0) {
+    $flagQuery = $pdo->prepare('SELECT id, vuln_id, vulnerability_name FROM flags WHERE id = ?');
+    $flagQuery->execute([$pendingFlagId]);
+    $flag = $flagQuery->fetch(PDO::FETCH_ASSOC);
+    if (!$flag) {
+        unset($_SESSION['pending_award_flag_id']);
+        $pendingAwardError = true;
+    }
 }
 
 if (empty($_SESSION['award_claim_csrf'])) {
@@ -71,7 +75,10 @@ $page_title = $award ? 'Achievement recorded' : 'Claim your achievement';
 require __DIR__ . '/includes/header.php';
 ?>
 <section class="card" style="max-width:700px;margin:32px auto;">
-  <?php if ($award): ?>
+  <?php if ($pendingAwardError && !$flag): ?>
+    <div class="error" role="alert">Your login bypass was detected, but we could not prepare the achievement record. Please contact your lab instructor; you do not need to submit another flag.</div>
+    <a class="button-link" href="/products.php">Continue to ShopEase</a>
+  <?php elseif ($award): ?>
     <div class="success" role="status">
       <strong>Discovery confirmed.</strong> Your achievement has been recorded for <?= htmlspecialchars($learnerName) ?>.
     </div>
@@ -84,13 +91,13 @@ require __DIR__ . '/includes/header.php';
   <?php else: ?>
     <span class="detail-kicker">Discovery confirmed</span>
     <h1>Claim your achievement</h1>
-    <p class="muted">You successfully demonstrated <strong><?= htmlspecialchars($flag['vulnerability_name'] ?: $flag['vuln_id']) ?></strong>. Add your own name and email so your certificate is identifiable even if you share this demo account with other learners.</p>
+    <p class="muted">Your login bypass was detected. You do not need to submit another flag or enter the shared demo username. Enter your own name and email below so the award and certificate identify you.</p>
     <?php if ($error !== null): ?><div class="error" role="alert"><?= htmlspecialchars($error) ?></div><?php endif; ?>
     <form method="POST" action="/claim_award.php">
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['award_claim_csrf'], ENT_QUOTES, 'UTF-8') ?>">
-      <label for="learner-name">Your name</label>
+      <label for="learner-name">Your full name (not the demo username)</label>
       <input id="learner-name" type="text" name="learner_name" maxlength="100" autocomplete="name" value="<?= htmlspecialchars($learnerName) ?>" required>
-      <label for="learner-email">Your email</label>
+      <label for="learner-email">Your personal email</label>
       <input id="learner-email" type="email" name="learner_email" maxlength="254" autocomplete="email" value="<?= htmlspecialchars($learnerEmail) ?>" required>
       <button type="submit">Record discovery and create certificate</button>
     </form>
