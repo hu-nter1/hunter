@@ -11,23 +11,28 @@ function certificate_pdf_text($value) {
     return str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $value);
 }
 
-function send_certificate_pdf($username, $vulnerabilityName, $completedAt) {
+function send_certificate_pdf($username, $vulnerabilityName, $completedAt, $learnerName, $learnerEmail, $awardCode) {
     $username = certificate_pdf_text($username);
     $vulnerabilityName = certificate_pdf_text($vulnerabilityName);
     $completedAt = certificate_pdf_text($completedAt);
+    $learnerName = certificate_pdf_text($learnerName);
+    $learnerEmail = certificate_pdf_text($learnerEmail);
+    $awardCode = certificate_pdf_text($awardCode);
 
-    $stream = "0.18 0.25 0.55 RG 2 w 8 8 272 128 re S\n";
-    $stream .= "BT /F1 14 Tf 24 111 Td (SHOPEASE LAB CERTIFICATE) Tj ET\n";
-    $stream .= "BT /F1 8 Tf 24 88 Td (Awarded to) Tj ET\n";
-    $stream .= "BT /F1 12 Tf 24 70 Td ($username) Tj ET\n";
-    $stream .= "BT /F1 8 Tf 24 51 Td (For discovering:) Tj ET\n";
-    $stream .= "BT /F1 10 Tf 24 34 Td ($vulnerabilityName) Tj ET\n";
-    $stream .= "BT /F1 7 Tf 24 18 Td ($completedAt) Tj ET\n";
+    $stream = "0.18 0.25 0.55 RG 2 w 8 8 416 236 re S\n";
+    $stream .= "BT /F1 18 Tf 24 216 Td (SHOPEASE LAB CERTIFICATE) Tj ET\n";
+    $stream .= "BT /F1 9 Tf 24 190 Td (Awarded to) Tj ET\n";
+    $stream .= "BT /F1 14 Tf 24 170 Td ($learnerName) Tj ET\n";
+    $stream .= "BT /F1 9 Tf 24 151 Td ($learnerEmail) Tj ET\n";
+    $stream .= "BT /F1 8 Tf 24 129 Td (Demo account: $username) Tj ET\n";
+    $stream .= "BT /F1 9 Tf 24 103 Td (For discovering: $vulnerabilityName) Tj ET\n";
+    $stream .= "BT /F1 9 Tf 24 78 Td (Certificate number: $awardCode) Tj ET\n";
+    $stream .= "BT /F1 8 Tf 24 55 Td (Awarded: $completedAt) Tj ET\n";
 
     $objects = [
         '<< /Type /Catalog /Pages 2 0 R >>',
         '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 144] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 432 252] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
         '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
         '<< /Length ' . strlen($stream) . " >>\nstream\n" . $stream . "endstream",
     ];
@@ -49,7 +54,7 @@ function send_certificate_pdf($username, $vulnerabilityName, $completedAt) {
     $pdf .= "startxref\n$xrefOffset\n%%EOF";
 
     header('Content-Type: application/pdf');
-    header('Content-Disposition: attachment; filename="shopease-achievement.pdf"');
+    header('Content-Disposition: attachment; filename="shopease-certificate-' . $awardCode . '.pdf"');
     header('Content-Length: ' . strlen($pdf));
     echo $pdf;
     exit;

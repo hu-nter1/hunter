@@ -20,7 +20,6 @@ if (isset($_GET['delete_user'])) {
 $users = $pdo->query("SELECT * FROM users")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <h3>Manage Users</h3>
-<a href="/admin.php?page=add_user.php"><button>Add User</button></a>
 <table>
     <tr><th>ID</th><th>Username</th><th>Email</th><th>Balance</th><th>Is Admin</th><th>Action</th></tr>
     <?php foreach ($users as $u): ?>

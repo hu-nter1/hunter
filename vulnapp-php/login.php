@@ -3,10 +3,12 @@ require __DIR__ . '/config.php';
 require __DIR__ . '/includes/session_check.php';
 
 $error = null;
+$sqlInjectionBypass = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = $_POST['username'] ?? '';
-    $password = $_POST['password'] ?? '';
+    $username = is_string($_POST['username'] ?? null) ? $_POST['username'] : '';
+    $password = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
+    $user = null;
 
     // VULNERABLE: SQLi and weak auth
     if (VULN_SQLI_LOGIN) {
@@ -15,7 +17,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = get_db()->query($sql);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
         } catch (Exception $e) {
-            $error = VULN_USERNAME_ENUMERATION ? "DB error: " . $e->getMessage() : "Invalid login.";
+            error_log('Login query failed: ' . $e->getMessage());
+            $error = "Invalid username or password.";
+        }
+
+        if ($user) {
+            $normalQuery = get_db()->prepare('SELECT * FROM users WHERE username = ?');
+            $normalQuery->execute([$username]);
+            $normalUser = $normalQuery->fetch(PDO::FETCH_ASSOC);
+            if ($normalUser) {
+                $normalLoginSucceeds = VULN_WEAK_PASSWORD_HASHING
+                    ? $password === $normalUser['password']
+                    : password_verify($password, $normalUser['password']);
+                $sqlInjectionBypass = !$normalLoginSucceeds;
+            } else {
+                $sqlInjectionBypass = true;
+            }
         }
     } else {
         // SECURE: Prepared statements
@@ -42,6 +59,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['username'] = $user['username'];
         $_SESSION['is_admin'] = (bool)$user['is_admin'];
+
+        if ($sqlInjectionBypass) {
+            $flagQuery = get_db()->prepare(
+                'SELECT id, vuln_id, vulnerability_name
+                 FROM flags WHERE vuln_id = ? AND vulnerability_name = ? LIMIT 1'
+            );
+            $flagQuery->execute(['VULN-004', 'SQL Injection in Login']);
+            $flag = $flagQuery->fetch(PDO::FETCH_ASSOC);
+            if ($flag) {
+                $_SESSION['pending_award_flag_id'] = (int)$flag['id'];
+                header('Location: /claim_award.php');
+                exit;
+            }
+            error_log('Login SQL injection was detected, but its award catalog entry is missing.');
+        }
 
         header('Location: /products.php');
         exit;

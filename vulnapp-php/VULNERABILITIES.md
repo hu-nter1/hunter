@@ -30,7 +30,7 @@ therefore been removed rather than presented as working instructions.
 | High | Diagnostic disclosure | The debug page exposes `phpinfo()`. PHP warnings and errors are logged server-side but not displayed in responses. The Docker startup applies a deployment access gate, which must continue to protect the lab. | `debug.php`, `config.php`, `Dockerfile` |
 | Medium | Profile-edit IDOR | The edit handler skips its ownership check when `VULN_IDOR_PROFILE_EDIT` is true, and updates the requested account's balance. Reachability depends on the surrounding admin-page routing. | `pages/edit_user.php`, `admin.php` |
 | Medium | SSRF / local resource fetch | The admin image-fetch handler passes the submitted URL to `file_get_contents()` without destination restrictions. | `pages/fetch_remote_image.php` |
-| Medium | Plaintext passwords and session fixation | Registration and demo seeding store plaintext passwords; successful login does not rotate the session ID under the current configuration. | `register.php`, `config.php`, `login.php` |
+| Medium | Plaintext passwords and session fixation | Demo seeding stores plaintext passwords; successful login does not rotate the session ID under the current configuration. Public registration and admin user creation are disabled. | `config.php`, `login.php` |
 | Medium | CSRF and unsafe state-changing requests | State changes lack CSRF tokens. Order approval and cart removal use GET requests. | `pages/orders.php`, `cart.php`, `checkout.php` |
 | Low | Missing upper quantity bound | The legacy quantity-update module has no upper-bound check when the integer-overflow toggle is on. The main cart flow enforces a lower bound of one, but no upper limit. | `pages/update_cart_quantity.php`, `cart.php` |
 | Low | Missing browser security headers | The shared header omits common security headers with `VULN_MISSING_HEADERS` enabled. | `includes/header.php` |
@@ -125,9 +125,10 @@ constant is `true`; it does **not** confirm an implemented or reachable challeng
 - The catalog contains named challenge entries, including repeated legacy vulnerability IDs
   where the inventory maps more than one challenge to that ID. Names, not IDs alone, distinguish
   those challenges.
-- A valid submission by a signed-in learner is recorded in `hall_of_fame` with a stable user
-  reference, username, email snapshot, flag reference, and timestamp. Existing achievement rows
-  are preserved and remain visible as legacy entries where their flag reference is unavailable.
+- A valid submission by a signed-in learner is recorded in `hall_of_fame` with a stable demo
+  account reference, learner-entered name and email, unique certificate number, flag reference,
+  and timestamp. Existing achievement rows are preserved; missing certificate numbers are
+  generated during additive schema initialization.
 - By default, SQLite uses `data/vulnapp.db` (or `$APP_DATA_DIR/vulnapp.db`). If `DATABASE_URL`
   is configured, the app uses that PostgreSQL database instead. Neon is initialized on normal
   application startup; no shop-data reset is required for the flag catalog.
@@ -139,13 +140,18 @@ constant is `true`; it does **not** confirm an implemented or reachable challeng
    challenge flags; it does not automatically detect or prove that an exploit occurred.
 2. Sign in to the lab and open **Submit Flag** (`/submit_flag.php`).
 3. Paste the exact flag or upload its downloaded plain-text file (up to 16 KB). The upload is
-   read for validation and is not stored on the server. A matching flag is attributed to the
-   current account and
-   appears in the Superadmin **Hall of Heroes** with username, email, flag, vulnerability type,
-   and discovery time. Re-submitting an already-earned flag does not create a duplicate award.
-4. A small PDF certificate downloads immediately after a valid submission. The learner's
-   profile also shows earned challenge names and timestamps; `generate_cert.php` can regenerate
-   a certificate only for an achievement owned by the signed-in learner.
+   read for validation and is not stored on the server. After validation, enter the individual
+   learner's name and email. Awards show the shared demo account, learner identity, unique
+   certificate number, vulnerability type, and discovery time in the Superadmin **Hall of
+   Heroes**. Re-submitting a flag for the same account, challenge, and learner email reuses the
+   existing award.
+4. Login SQL injection is detected when the vulnerable query authenticates a learner who would
+   not authenticate with an exact username/password check. That success opens the same identity
+   claim form. Other challenge types still require flag submission; automatic exploit detection
+   is not implemented for every catalog entry. After a claim is saved, the page confirms the
+   discovery and links to its PDF certificate. The learner profile lists individual identity
+   and certificate links. `generate_cert.php` authorizes by certificate number and signed-in
+   demo account.
 
 Flags are stored in the database, so do not publish their values in documentation or expose
 them in learner-facing catalog pages. A fresh deployment creates catalog values automatically;
@@ -153,12 +159,13 @@ existing shop and achievement rows are not reset.
 
 ### Flag workflow caveats
 
-- A valid flag submission records a self-reported completion; it is not independent proof that
-  the learner exploited the associated vulnerability.
+- A valid flag submission records a claimed completion; it is not independent proof that the
+  learner exploited the associated vulnerability. Login SQL injection is automatically
+  detected, but the learner still self-identifies when claiming the award.
 - The catalog identifies intended challenge topics, but it does not make an unimplemented
   vulnerability toggle into a working exercise. See the source-verified inventory above.
-- The Hall of Heroes retains the learner's email at submission time so the record remains
-  attributable if the corresponding user account is later removed.
+- The Hall of Heroes retains the learner's name, email, shared-account name, and unique
+  certificate number so the record remains attributable if the demo account is later removed.
 
 ## Safe ways to use this guide
 

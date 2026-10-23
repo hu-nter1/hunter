@@ -10,7 +10,6 @@ A normal-looking 5-page shop built in plain PHP + PDO (no framework) as an inten
 3. `profile.php` — profile display and earned-flag history.
 4. `product.php` — product details and validated image display.
 5. `admin.php` — admin pages and product/user/order management.
-6. `register.php` — learner registration with an email address for achievement attribution.
 
 Admin product management accepts an image URL or a local JPG, PNG, GIF, or WebP upload. Storefront
 product cards preserve image aspect ratios and fit images within each card.
@@ -25,10 +24,12 @@ For developers diagnosing failures or preparing updates, see the
 The named challenge-flag catalog is initialized in the active SQLite or PostgreSQL/Neon
 database without resetting existing shop data. A signed-in learner can submit a discovered
 flag at `/submit_flag.php` by pasting it or selecting its downloaded plain-text file from
-their computer. Valid submissions download a small PDF certificate and are listed in the
-Superadmin Hall of Heroes with username, email, flag, vulnerability type, and timestamp.
-Uploaded files are limited to 16 KB, read as plain text, and not stored by the app. Flag
-submission is a self-reported achievement and does not automatically detect an exploit.
+their computer. Valid submissions ask for the learner's name and email, then issue a small PDF
+certificate with a unique number. Awards are listed in the Superadmin Hall of Heroes with
+the individual learner identity and shared demo account. Successful SQL-injection login
+bypasses open the award-claim form automatically; other challenges still require flag
+submission. Uploaded files are limited to 16 KB, read as plain text, and not stored by the
+app. Other flag submissions are self-reported and do not automatically detect an exploit.
 
 ## Setup
 Needs PHP 8.x with the `sqlite3`/`pdo_sqlite` extension for local development (commonly
@@ -47,7 +48,7 @@ This deletes the users, products, orders, comments, reviews, flags, and activity
 
 Demo logins: `alice/alice123`, `bob/bobpass`, `admin/admin!2024`
 
-Register a new account at `/register.php`.
+Account registration is disabled. Students should use the shared demo accounts above.
 
 Make sure the `uploads/` folder is writable by the PHP process (`chmod 755 uploads` is enough on most local setups).
 
@@ -57,20 +58,11 @@ Make sure the `uploads/` folder is writable by the PHP process (`chmod 755 uploa
 cd vulnapp-php
 php -S 127.0.0.1:8081
 ```
-Open `http://127.0.0.1:8081/register.php` in a browser, or test the API directly:
+Verify the retired public registration route is unavailable:
 ```bash
-# normal registration (auto-logs in, redirects to /products.php)
-curl -i -X POST http://127.0.0.1:8081/register.php \
-  -d "username=testuser&password=1234&confirm=1234&email=t@x.com"
-
-# mass-assignment exploit: is_admin isn't on the form but the backend trusts it anyway
-curl -i -X POST http://127.0.0.1:8081/register.php \
-  -d "username=evil&password=1&confirm=1&is_admin=1&ssn=111-11-1111"
-
-# registering an existing username -> user enumeration
-curl -i -X POST http://127.0.0.1:8081/register.php \
-  -d "username=alice&password=x&confirm=x"
+curl -i http://127.0.0.1:8081/register.php
 ```
+The removed route returns `404 Not Found`. Learners use the seeded demo accounts; user creation is unavailable in both the public shop and admin panel.
 Delete `vulnapp.db` any time to reset to the seeded demo data.
 
 ## Deploying to Render

@@ -286,7 +286,7 @@ function initialize_schema(PDO $pdo) {
         'access_logs' => "(id $autoId, ua TEXT)",
         'remember_tokens' => '(id INTEGER PRIMARY KEY, user_id INTEGER, token TEXT)',
         'flags' => "(id $autoId, vuln_id TEXT, flag TEXT)",
-        'hall_of_fame' => "(id $autoId, username TEXT, email TEXT, user_id INTEGER, vuln_id TEXT, flag_id INTEGER, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
+        'hall_of_fame' => "(id $autoId, username TEXT, email TEXT, user_id INTEGER, vuln_id TEXT, flag_id INTEGER, learner_name TEXT, learner_email TEXT, award_code TEXT, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
         'activity_logs' => "(id $autoId, username TEXT, action TEXT, timestamp $timestampType DEFAULT CURRENT_TIMESTAMP)",
     ];
     foreach ($tables as $table => $definition) {
@@ -313,6 +313,9 @@ function initialize_schema(PDO $pdo) {
             'email' => 'TEXT',
             'user_id' => 'INTEGER',
             'flag_id' => 'INTEGER',
+            'learner_name' => 'TEXT',
+            'learner_email' => 'TEXT',
+            'award_code' => 'TEXT',
         ],
         'activity_logs' => ['timestamp' => USE_POSTGRES ? 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' : 'DATETIME'],
     ];
@@ -333,12 +336,113 @@ function initialize_schema(PDO $pdo) {
     }
 
     $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS flags_vulnerability_name_unique ON flags (vulnerability_name)');
+    $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS hall_of_fame_award_code_unique ON hall_of_fame (award_code)');
+    $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS hall_of_fame_identity_award_unique
+        ON hall_of_fame (user_id, flag_id, LOWER(learner_email))
+        WHERE learner_email IS NOT NULL AND learner_email <> ''");
     seed_vulnerability_flags($pdo);
+    backfill_award_codes($pdo);
 
     if (!USE_POSTGRES) {
         $pdo->exec("CREATE TRIGGER IF NOT EXISTS orders_created_at_default AFTER INSERT ON orders WHEN NEW.created_at IS NULL BEGIN UPDATE orders SET created_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
         $pdo->exec("CREATE TRIGGER IF NOT EXISTS hall_of_fame_timestamp_default AFTER INSERT ON hall_of_fame WHEN NEW.timestamp IS NULL BEGIN UPDATE hall_of_fame SET timestamp = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
         $pdo->exec("CREATE TRIGGER IF NOT EXISTS activity_logs_timestamp_default AFTER INSERT ON activity_logs WHEN NEW.timestamp IS NULL BEGIN UPDATE activity_logs SET timestamp = CURRENT_TIMESTAMP WHERE id = NEW.id; END");
+    }
+}
+
+function generate_certificate_number(PDO $pdo) {
+    $exists = $pdo->prepare('SELECT 1 FROM hall_of_fame WHERE award_code = ?');
+    for ($attempt = 0; $attempt < 10; $attempt++) {
+        $code = (string)random_int(100000000, 999999999);
+        $exists->execute([$code]);
+        if ($exists->fetchColumn() === false) {
+            return $code;
+        }
+    }
+
+    throw new RuntimeException('Unable to generate a unique certificate number.');
+}
+
+function backfill_award_codes(PDO $pdo) {
+    $missing = $pdo->query("SELECT id FROM hall_of_fame WHERE award_code IS NULL OR award_code = ''")
+        ->fetchAll(PDO::FETCH_COLUMN);
+    $update = $pdo->prepare("UPDATE hall_of_fame SET award_code = ? WHERE id = ? AND (award_code IS NULL OR award_code = '')");
+
+    foreach ($missing as $id) {
+        $update->execute([generate_certificate_number($pdo), $id]);
+    }
+}
+
+function record_vulnerability_award(
+    PDO $pdo,
+    array $user,
+    array $flag,
+    string $learnerName,
+    string $learnerEmail
+) {
+    $ownsTransaction = !$pdo->inTransaction();
+    if ($ownsTransaction) {
+        $pdo->beginTransaction();
+    }
+
+    try {
+        if (USE_POSTGRES) {
+            $pdo->query('SELECT pg_advisory_xact_lock(741902382)')->fetchColumn();
+        }
+
+        $existing = $pdo->prepare(
+            'SELECT id, timestamp, award_code, learner_name, learner_email FROM hall_of_fame
+             WHERE user_id = ? AND flag_id = ? AND LOWER(learner_email) = LOWER(?)
+             ORDER BY id DESC LIMIT 1'
+        );
+        $existing->execute([$user['id'], $flag['id'], $learnerEmail]);
+        $award = $existing->fetch(PDO::FETCH_ASSOC);
+        if ($award) {
+            if (empty($award['award_code'])) {
+                $award['award_code'] = generate_certificate_number($pdo);
+                $update = $pdo->prepare('UPDATE hall_of_fame SET award_code = ? WHERE id = ?');
+                $update->execute([$award['award_code'], $award['id']]);
+            }
+            if ($ownsTransaction) {
+                $pdo->commit();
+            }
+            return $award;
+        }
+
+        $awardCode = generate_certificate_number($pdo);
+        $awardId = insert_and_get_id(
+            $pdo,
+            'INSERT INTO hall_of_fame (username, email, user_id, vuln_id, flag_id, learner_name, learner_email, award_code)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+                $user['username'],
+                $user['email'] ?? '',
+                $user['id'],
+                $flag['vuln_id'],
+                $flag['id'],
+                $learnerName,
+                $learnerEmail,
+                $awardCode,
+            ]
+        );
+        $timestampQuery = $pdo->prepare('SELECT timestamp FROM hall_of_fame WHERE id = ?');
+        $timestampQuery->execute([$awardId]);
+        $award = [
+            'id' => $awardId,
+            'timestamp' => $timestampQuery->fetchColumn(),
+            'award_code' => $awardCode,
+            'learner_name' => $learnerName,
+            'learner_email' => $learnerEmail,
+        ];
+        if ($ownsTransaction) {
+            $pdo->commit();
+        }
+        return $award;
+    } catch (Throwable $exception) {
+        if ($ownsTransaction && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
     }
 }
 

@@ -64,26 +64,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($flag) {
-        $pdo->beginTransaction();
-        $earnedQuery = $pdo->prepare('SELECT timestamp FROM hall_of_fame WHERE user_id = ? AND flag_id = ?');
-        $earnedQuery->execute([$user['id'], $flag['id']]);
-        $earnedAt = $earnedQuery->fetchColumn();
-        if ($earnedAt === false) {
-            $award = $pdo->prepare(
-                'INSERT INTO hall_of_fame (username, email, user_id, vuln_id, flag_id) VALUES (?, ?, ?, ?, ?)'
-            );
-            $award->execute([$user['username'], $user['email'], $user['id'], $flag['vuln_id'], $flag['id']]);
-            $earnedQuery->execute([$user['id'], $flag['id']]);
-            $earnedAt = $earnedQuery->fetchColumn();
-        }
-        $pdo->commit();
-
-        require __DIR__ . '/includes/certificate_pdf.php';
-        send_certificate_pdf(
-            $user['username'],
-            $flag['vulnerability_name'] ?: $flag['vuln_id'],
-            $earnedAt . ' UTC'
-        );
+        $_SESSION['pending_award_flag_id'] = (int)$flag['id'];
+        header('Location: /claim_award.php');
+        exit;
     }
 
     if ($message === '') {
@@ -96,7 +79,7 @@ require __DIR__ . '/includes/header.php';
 ?>
 <div class="card" style="max-width:720px;margin:32px auto;">
   <h2>Submit a discovered flag</h2>
-  <p class="muted">Paste the flag or upload its downloaded plain-text file from your computer. A valid submission records your achievement and downloads your certificate.</p>
+  <p class="muted">Paste the flag or upload its downloaded plain-text file from your computer. After validation, add your name and email so your certificate and achievement can be attributed to you, even when sharing a demo account.</p>
   <?php if ($message !== ''): ?><div class="error" role="alert"><?= htmlspecialchars($message) ?></div><?php endif; ?>
   <style>
     .flag-file-input { display:block; width:100%; margin:6px 0 18px; padding:12px; border:1px dashed #c9d2e8; border-radius:10px; background:#f7f8fc; color:#3a4560; }
@@ -108,7 +91,7 @@ require __DIR__ . '/includes/header.php';
     <p class="flag-option-separator">OR UPLOAD A DOWNLOADED FLAG FILE</p>
     <label for="flag-file">Downloaded flag file (plain text, up to 16 KB)</label>
     <input class="flag-file-input" id="flag-file" type="file" name="flag_file">
-    <button type="submit">Verify flag and download certificate</button>
+    <button type="submit">Verify flag</button>
   </form>
 </div>
 <?php require __DIR__ . '/includes/footer.php'; ?>

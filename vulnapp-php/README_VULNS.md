@@ -1,4 +1,4 @@
-# Vulnerability Lab Inventory: Total 37 Labs
+# Vulnerability Lab Inventory
 
 This lab contains 37 distinct, toggleable vulnerabilities for educational security testing. Each can be managed via the Admin Settings page or the Superadmin Backend.
 
@@ -16,7 +16,6 @@ This lab contains 37 distinct, toggleable vulnerabilities for educational securi
 - [ ] VULN-010: Error-based SQL Injection (products.php)
 - [ ] VULN-011: Blind Boolean SQL Injection (products.php)
 - [ ] VULN-012: Blind Time-based SQL Injection (products.php)
-- [ ] VULN-013: Second-order SQL Injection (register.php / admin.php)
 - [ ] VULN-014: Header-based SQL Injection (includes/log_ua.php)
 - [ ] VULN-031: SQL Comment Filter Bypass (products.php)
 
