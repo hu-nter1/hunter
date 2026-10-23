@@ -448,14 +448,22 @@ function award_claim_challenge_key(string $vulnerabilityId, ?string $vulnerabili
 
 function reserve_award_claim(PDO $pdo, string $challengeKey, string $learnerEmail) {
     try {
+        if ($pdo->inTransaction()) {
+            $pdo->exec('SAVEPOINT reserve_award_claim_sp');
+        }
         $reservation = $pdo->prepare(
             'INSERT INTO award_claims (challenge_key, learner_email)
              VALUES (?, ?)'
         );
         $reservation->execute([$challengeKey, $learnerEmail]);
+        if ($pdo->inTransaction()) {
+            $pdo->exec('RELEASE SAVEPOINT reserve_award_claim_sp');
+        }
         return $reservation->rowCount() === 1;
     } catch (PDOException $e) {
-        // Unique constraint violation (PostgreSQL 23505 or SQLite 19/UNIQUE constraint)
+        if ($pdo->inTransaction()) {
+            $pdo->exec('ROLLBACK TO SAVEPOINT reserve_award_claim_sp');
+        }
         if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'UNIQUE constraint') || str_contains($e->getMessage(), 'violates unique constraint')) {
             return false;
         }
