@@ -199,8 +199,8 @@ function vulnerability_flag_catalog() {
         ['VULN-035', 'Exposed Backup Files'],
         ['VULN-036', 'Debug Endpoint Information Disclosure'],
         ['VULN-037', 'Missing Security Headers'],
-        ['VULN-023', 'Vertical Privilege Escalation'],
-        ['VULN-014', 'SQL Comment Filter Bypass'],
+        ['VULN-038', 'Vertical Privilege Escalation'],
+        ['VULN-039', 'SQL Comment Filter Bypass'],
     ];
 }
 
