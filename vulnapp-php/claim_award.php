@@ -8,17 +8,34 @@ if (!$user) {
     exit;
 }
 
+$pendingAward = $_SESSION['pending_award'] ?? null;
 $pendingFlagId = (int)($_SESSION['pending_award_flag_id'] ?? 0);
 $pendingAwardError = !empty($_SESSION['pending_award_error']);
 unset($_SESSION['pending_award_error']);
-if ($pendingFlagId < 1 && !$pendingAwardError) {
+if ($pendingAwardError && !is_array($pendingAward) && $pendingFlagId < 1) {
+    $pendingAward = [
+        'vuln_id' => 'VULN-004',
+        'vulnerability_name' => 'SQL Injection in Login',
+    ];
+    $_SESSION['pending_award'] = $pendingAward;
+    $pendingAwardError = false;
+}
+if (!is_array($pendingAward) && $pendingFlagId < 1 && !$pendingAwardError) {
     header('Location: /products.php');
     exit;
 }
 
 $pdo = get_db();
-$flag = false;
-if ($pendingFlagId > 0) {
+$flag = is_array($pendingAward)
+    && is_string($pendingAward['vuln_id'] ?? null)
+    && is_string($pendingAward['vulnerability_name'] ?? null)
+        ? [
+            'id' => null,
+            'vuln_id' => $pendingAward['vuln_id'],
+            'vulnerability_name' => $pendingAward['vulnerability_name'],
+        ]
+        : false;
+if (!$flag && $pendingFlagId > 0) {
     $flagQuery = $pdo->prepare('SELECT id, vuln_id, vulnerability_name FROM flags WHERE id = ?');
     $flagQuery->execute([$pendingFlagId]);
     $flag = $flagQuery->fetch(PDO::FETCH_ASSOC);
@@ -62,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
                 $learnerName = $award['learner_name'] ?? $learnerName;
                 $learnerEmail = $award['learner_email'] ?? $learnerEmail;
-                unset($_SESSION['pending_award_flag_id']);
+                unset($_SESSION['pending_award'], $_SESSION['pending_award_flag_id']);
             } catch (Throwable $exception) {
                 error_log('Award claim failed: ' . $exception->getMessage());
                 $error = 'We could not save your achievement right now. Please retry, or contact your lab instructor if the problem continues.';

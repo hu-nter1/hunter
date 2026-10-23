@@ -103,8 +103,10 @@ $users = $pdo->query("SELECT * FROM users ORDER BY id DESC")->fetchAll(PDO::FETC
 $products = $pdo->query("SELECT * FROM products ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 $heroes = $pdo->query(
     "SELECT h.username, COALESCE(h.email, u.email, '') AS email, h.vuln_id,
-            h.learner_name, h.learner_email, h.award_code,
-            COALESCE(f.vulnerability_name, h.vuln_id) AS vulnerability_name,
+            h.learner_name, h.learner_email, h.award_code, h.flag_id,
+            COALESCE(f.vulnerability_name, CASE h.vuln_id
+                WHEN 'VULN-004' THEN 'SQL Injection in Login'
+                ELSE h.vuln_id END) AS vulnerability_name,
             f.flag, h.timestamp
      FROM hall_of_fame h
      LEFT JOIN users u ON h.user_id = u.id OR (h.user_id IS NULL AND h.username = u.username)
@@ -185,7 +187,7 @@ $heroes = $pdo->query(
         <td><?= htmlspecialchars($h['learner_email'] ?? '') ?></td>
         <td><?= htmlspecialchars($h['username']) ?><?= $h['email'] !== '' ? ' · ' . htmlspecialchars($h['email']) : '' ?></td>
         <td><?= htmlspecialchars($h['award_code'] ?? '') ?></td>
-        <td><code><?= htmlspecialchars($h['flag'] ?? 'Legacy entry') ?></code></td>
+        <td><code><?= htmlspecialchars($h['flag'] ?? ($h['flag_id'] === null ? 'Automatically detected' : 'Legacy entry')) ?></code></td>
         <td><?= htmlspecialchars($h['vulnerability_name']) ?> (<?= htmlspecialchars($h['vuln_id']) ?>)</td>
         <td><?= htmlspecialchars($h['timestamp']) ?></td>
     </tr>

@@ -15,7 +15,9 @@ $flags = [];
 if ($profile) {
     $stmt = get_db()->prepare(
         "SELECT h.vuln_id, h.timestamp, h.learner_name, h.learner_email, h.award_code,
-                COALESCE(f.vulnerability_name, h.vuln_id) AS vulnerability_name
+                COALESCE(f.vulnerability_name, CASE h.vuln_id
+                    WHEN 'VULN-004' THEN 'SQL Injection in Login'
+                    ELSE h.vuln_id END) AS vulnerability_name
          FROM hall_of_fame h
          LEFT JOIN flags f ON h.flag_id = f.id
          WHERE h.user_id = ? OR (h.user_id IS NULL AND h.username = ?)

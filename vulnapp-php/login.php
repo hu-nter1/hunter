@@ -61,17 +61,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['is_admin'] = (bool)$user['is_admin'];
 
         if ($sqlInjectionBypass) {
-            try {
-                $flag = get_or_create_vulnerability_flag(
-                    get_db(),
-                    'VULN-004',
-                    'SQL Injection in Login'
-                );
-                $_SESSION['pending_award_flag_id'] = (int)$flag['id'];
-            } catch (Throwable $exception) {
-                error_log('Unable to prepare the login SQL-injection award: ' . $exception->getMessage());
-                $_SESSION['pending_award_error'] = true;
-            }
+            unset($_SESSION['pending_award_flag_id'], $_SESSION['pending_award_error']);
+            $_SESSION['pending_award'] = [
+                'vuln_id' => 'VULN-004',
+                'vulnerability_name' => 'SQL Injection in Login',
+            ];
             header('Location: /claim_award.php');
             exit;
         }

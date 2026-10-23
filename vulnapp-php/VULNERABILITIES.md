@@ -147,13 +147,13 @@ constant is `true`; it does **not** confirm an implemented or reachable challeng
    existing award.
 4. Login SQL injection is detected when the vulnerable query authenticates a learner who would
    not authenticate with an exact username/password check. That success opens the same identity
-   claim form; its named challenge flag is created on demand if the catalog row is absent.
-   Learners enter their personal name and email there, not another flag or the shared username.
-   Other challenge types still require flag submission; automatic exploit detection is not
-   implemented for every catalog entry. After a claim is saved, the page confirms the discovery
-   and links to its PDF certificate. The learner profile lists individual identity and
-   certificate links. `generate_cert.php` authorizes by certificate number and signed-in demo
-   account.
+   claim form. This award is saved directly with its vulnerability ID and does not depend on a
+   row in the challenge-flag catalog. Learners enter their personal name and email there, not
+   another flag or the shared username. Other challenge types still require flag submission;
+   automatic exploit detection is not implemented for every catalog entry. After a claim is
+   saved, the page confirms the discovery and links to its PDF certificate. The learner profile
+   lists individual identity and certificate links. `generate_cert.php` authorizes by
+   certificate number and signed-in demo account.
 
 Flags are stored in the database, so do not publish their values in documentation or expose
 them in learner-facing catalog pages. A fresh deployment creates catalog values automatically;

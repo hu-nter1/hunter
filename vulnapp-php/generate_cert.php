@@ -13,22 +13,30 @@ $pdo = get_db();
 $awardCode = is_string($_GET['award_code'] ?? null) ? trim($_GET['award_code']) : '';
 if ($awardCode !== '') {
     $stmt = $pdo->prepare(
-        'SELECT f.vuln_id, f.vulnerability_name, h.timestamp, h.learner_name, h.learner_email, h.award_code
-         FROM flags f
-         JOIN hall_of_fame h ON h.flag_id = f.id
+        "SELECT COALESCE(f.vuln_id, h.vuln_id) AS vuln_id,
+                COALESCE(f.vulnerability_name, CASE h.vuln_id
+                    WHEN 'VULN-004' THEN 'SQL Injection in Login'
+                    ELSE h.vuln_id END) AS vulnerability_name,
+                h.timestamp, h.learner_name, h.learner_email, h.award_code
+         FROM hall_of_fame h
+         LEFT JOIN flags f ON h.flag_id = f.id
          WHERE h.award_code = ? AND h.user_id = ?
-         LIMIT 1'
+         LIMIT 1"
     );
     $stmt->execute([$awardCode, $user['id']]);
 } else {
     $flagId = (int)($_GET['flag_id'] ?? 0);
     $stmt = $pdo->prepare(
-        'SELECT f.vuln_id, f.vulnerability_name, h.timestamp, h.learner_name, h.learner_email, h.award_code
-         FROM flags f
-         JOIN hall_of_fame h ON h.flag_id = f.id
-         WHERE f.id = ? AND h.user_id = ?
+        "SELECT COALESCE(f.vuln_id, h.vuln_id) AS vuln_id,
+                COALESCE(f.vulnerability_name, CASE h.vuln_id
+                    WHEN 'VULN-004' THEN 'SQL Injection in Login'
+                    ELSE h.vuln_id END) AS vulnerability_name,
+                h.timestamp, h.learner_name, h.learner_email, h.award_code
+         FROM hall_of_fame h
+         LEFT JOIN flags f ON h.flag_id = f.id
+         WHERE h.flag_id = ? AND h.user_id = ?
          ORDER BY h.timestamp DESC
-         LIMIT 1'
+         LIMIT 1"
     );
     $stmt->execute([$flagId, $user['id']]);
 }
