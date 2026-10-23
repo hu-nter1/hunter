@@ -456,12 +456,20 @@ function award_claim_challenge_key(string $vulnerabilityId, ?string $vulnerabili
 }
 
 function reserve_award_claim(PDO $pdo, string $challengeKey, string $learnerEmail) {
-    $reservation = $pdo->prepare(
-        'INSERT INTO award_claims (challenge_key, learner_email)
-         VALUES (?, ?) ON CONFLICT DO NOTHING'
-    );
-    $reservation->execute([$challengeKey, $learnerEmail]);
-    return $reservation->rowCount() === 1;
+    try {
+        $reservation = $pdo->prepare(
+            'INSERT INTO award_claims (challenge_key, learner_email)
+             VALUES (?, ?)'
+        );
+        $reservation->execute([$challengeKey, $learnerEmail]);
+        return $reservation->rowCount() === 1;
+    } catch (PDOException $e) {
+        // Unique constraint violation (PostgreSQL 23505 or SQLite 19/UNIQUE constraint)
+        if ($e->getCode() === '23505' || str_contains($e->getMessage(), 'UNIQUE constraint') || str_contains($e->getMessage(), 'violates unique constraint')) {
+            return false;
+        }
+        throw $e;
+    }
 }
 
 function find_registered_award(PDO $pdo, string $challengeKey, string $learnerEmail) {
